@@ -1,0 +1,13 @@
+.program sig_gen
+
+// The value in Y register determines the rate/frequency
+// at which PIO will output the sample values from the PIO FIFO.
+// When loading this program into PIO state machine,
+// you should therefore also load the desired value into the Y register.
+
+.wrap_target
+	mov Y X
+mark:
+	jmp Y-- mark
+	out PINS 8
+.wrap
