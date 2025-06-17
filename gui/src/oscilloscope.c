@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 // #include <stdlib.h> // strtoul()
@@ -13,7 +15,7 @@
 
 #include "my_types.h"
 #include "my_ui.h"
-#include "arena.c"
+// #include "arena.c"
 #include "usb.c"
 
 #include "shaders.h"

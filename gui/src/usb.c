@@ -1,3 +1,5 @@
+#include "my_memory.c"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -16,6 +18,84 @@
 
 #define ID_VENDOR  0
 #define ID_PRODUCT 1
+
+
+typedef struct {
+    i32 id;
+    i32 size;
+    void *data;
+} block_t;
+
+
+typedef struct {
+    ring_buffer_t rbuf;
+    i32 id_head_next;
+    i32 id_tail;
+    i32 num_blocks;
+} block_queue_t;
+
+
+
+internal block_t *push_block(block_queue_t *queue, u64 size, u32 align) {
+    void *buf = rbuf_push(&queue->rbuf, sizeof(block_t) + size + align);
+    if (buf == NULL)  {
+        return NULL;
+    }
+
+    block_t *block = (block_t *)buf;
+    void *block_data = align_pow2((void *)((uintptr_t)buf + sizeof(block_t)), align);
+
+    *block = (block_t){
+        .id = queue->id_head_next,
+        .size = sizeof(block_t) + size + align,
+        .data = block_data
+    };
+    queue->id_head_next++;
+    queue->num_blocks++;
+
+    return block;
+}
+
+
+internal u64 write_block(block_queue_t *queue, u64 size, void *data, u32 align) {
+    block_t *block = push_block(queue, size, align);
+    if (block == NULL) {
+        return 0;
+    }
+    memcpy(block->data, data, size);
+    return size;
+}
+
+
+internal void queue_free_block(block_queue_t *queue, block_t *block) {
+    block->data = NULL;
+    if (block->id == queue->id_tail) {
+        queue->num_blocks--;
+
+        block_t *next_tail = rbuf_pop(&queue->rbuf, block->size);
+        while ((next_tail->data != NULL) && (queue->num_blocks > 0)) {
+            queue->num_blocks--;
+            next_tail = rbuf_pop(&queue->rbuf, next_tail->size);
+        }
+
+        queue->id_tail = (queue->num_blocks != 0) ? next_tail->id : queue->id_head_next;
+    }
+}
+
+
+#define DEFAULT_BLOCK_QUEUE_SIZE    MB(2)
+block_queue_t g_block_queue;
+
+__attribute__((constructor(202)))
+void setup_queue(void) {
+    g_block_queue = (block_queue_t){
+    .rbuf = get_ring_buffer(DEFAULT_BLOCK_QUEUE_SIZE),
+    .id_head_next = 0,
+    .id_tail = 0,
+    .num_blocks = 0,
+    };
+}
+
 
 
 void convert_copy_u8_to_f32(f32 *dest, u8 *src, i32 count) {
@@ -339,20 +419,20 @@ static void usb_cb_free(struct libusb_transfer *transfer) {
     }
 
     if (transfer->user_data != NULL) {
-        free(transfer->user_data);
+        block_t *block = (block_t *)transfer->user_data;
+        queue_free_block(&g_block_queue, block);
     }
     libusb_free_transfer(transfer);
 }
 
 
 static void send_signal_restart(libusb_device_handle *dev, u16 active_channels) {
-    void *transfer_buf_ = malloc(16);
-    if (transfer_buf_ == NULL) {
+    block_t *transfer_buf_block = push_block(&g_block_queue, 16, 2);
+    if (transfer_buf_block == NULL) {
         fprintf(stderr, "Error: Malloc failed to allocate buffer for sending\n");
         return;
     }
-    // NOTE: Buffer address must be 2-byte aligned
-    u8 *transfer_buf = (u8 *)(((uintptr_t)transfer_buf_ + 1) & (~1));
+    u8 *transfer_buf = (u8 *)(transfer_buf_block->data);
 
     struct libusb_transfer *transfer_reset = libusb_alloc_transfer(0);
     if(transfer_reset == NULL) {
@@ -360,11 +440,11 @@ static void send_signal_restart(libusb_device_handle *dev, u16 active_channels) 
     }
 
     libusb_fill_control_setup(transfer_buf, 0x40, 3, active_channels, 0, 0);
-    libusb_fill_control_transfer(transfer_reset, dev, transfer_buf, usb_cb_free, transfer_buf_, 1000);
+    libusb_fill_control_transfer(transfer_reset, dev, transfer_buf, usb_cb_free, transfer_buf_block, 1000);
 
     if (libusb_submit_transfer(transfer_reset) != 0) {
         perror("Error! Could not submit the RESTART ctrl_transfer!\n");
-        free(transfer_buf_);
+        queue_free_block(&g_block_queue, transfer_buf_block);
         libusb_free_transfer(transfer_reset);
     }
 }
@@ -376,12 +456,12 @@ static void send_signal_buf(void *sig_buf, u16 len, libusb_device_handle *dev, b
 
     u32 num_pkt = (len + pkt_buf_len - 1) / pkt_buf_len;
 
-    void *transfer_buf_ = malloc(pkt_size * num_pkt + 1);
-    if (transfer_buf_ == NULL) {
+    block_t *transfer_buf_block = push_block(&g_block_queue, pkt_size * num_pkt + 1, 2);
+    if (transfer_buf_block == NULL) {
         fprintf(stderr, "Error: Malloc failed to allocate buffer for sending\n");
         return;
     }
-    u8 *transfer_buf = (u8 *)(((uintptr_t)transfer_buf_ + 2) & (~1));
+    u8 *transfer_buf = (u8 *)(transfer_buf_block->data);
 
     for (u32 i = 0; i < num_pkt; i++) {
         struct libusb_transfer *transfer = libusb_alloc_transfer(0);
@@ -403,11 +483,11 @@ static void send_signal_buf(void *sig_buf, u16 len, libusb_device_handle *dev, b
         }
         libusb_fill_control_setup((unsigned char *)buf, 0x40, 5, wValue, wIndex, length);
         libusb_fill_control_transfer(transfer, dev, (unsigned char *)buf, usb_cb_free,
-                                     (i == (num_pkt-1)) ? transfer_buf_ : NULL, 1000);
+                                     (i == (num_pkt-1)) ? transfer_buf_block : NULL, 1000);
 
         if (libusb_submit_transfer(transfer) != 0) {
             printf("Error! Could not submit the signal transfer i = %d.\n", i);
-            free(transfer_buf_);
+            queue_free_block(&g_block_queue, transfer_buf_block);
             libusb_free_transfer(transfer);
             break;
         }
