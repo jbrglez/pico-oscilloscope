@@ -248,7 +248,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
         u8 addr = 0;
 
         if (print_line_failed_many_few(2, 3, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("jmp (!X|X--|!Y|Y--|X!=Y|PIN|!OSRE) <target_label>", line_words);
         }
         else if (words.length == 3) {
             slice_t condition = words.items[1];
@@ -291,7 +291,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "wait")) {
 
         if (print_line_failed_many_few(4, 5, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("wait <0|1> <GPIO|PIN|IRQ> <gpio_num|pin_num|irq_num>", line_words);
         }
 
         u8 rel = 0;
@@ -362,7 +362,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "in")) {
 
         if (print_line_failed_many_few(3, 3, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("in <PINS|X|Y|NULL|ISR|OSR> <bit_count>", line_words);
         }
 
 
@@ -398,7 +398,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "out")) {
 
         if (print_line_failed_many_few(3, 3, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("out <PINS|X|Y|NULL|PINDIRS|PC|ISR|OSR> <bit_count>", line_words);
         }
 
         u8 dest;
@@ -436,7 +436,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "push")) {
 
         if (print_line_failed_many_few(1, 3, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("push (iffull) (block|noblock)", line_words);
         }
 
         u8 iff = 0;
@@ -479,12 +479,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "pull")) {
 
         if (print_line_failed_many_few(1, 3, words)) {
-            // CHECK: What should happen here?
-        }
-        else {
-            print_std_error("Parsing failed",
-                            "Expected format: pull (ifempty) ( |block|noblock)\n");
-            print_stderror_slice_array("Failed to parse line >", line_words, "\n");
+            print_std_error_format("pull (ifempty) (block|noblock)", line_words);
         }
 
         u8 ife = 0;
@@ -522,10 +517,17 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
         instruction = encode_pull(delay_side_value, ife, blk);
     }
 
+    else if (is_slice_equal_to_str(words.items[0], "nop")) {
+        if (print_line_failed_many_few(1, 1, words)) {
+            print_std_error_format("nop", line_words);
+        }
+        instruction = encode_mov(delay_side_value, 2, 0, 2);
+    }
+
     else if (is_slice_equal_to_str(words.items[0], "mov")) {
 
         if (print_line_failed_many_few(3, 4, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("mov <PINS|X|Y|EXEC|PC|ISR|OSR> (!|~|::) <PINS|X|Y|NULL|STATUS|ISR|OSR>", line_words);
         }
 
         u8 dest;
@@ -579,7 +581,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "irq")) {
 
         if (print_line_failed_many_few(2, 4, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("irq (set|nowait|wait|clear) <irq_num> (rel)", line_words);
         }
 
         u8 rel = 0;
@@ -590,9 +592,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
         }
 
         if (words.length > 3) {
-            print_std_error("Parsing failed",
-                            "Expected format: irq (set|nowait|wait|clear) <irq_num> (rel)\n");
-            print_stderror_slice_array("Failed to parse line >", line_words, "\n");
+            print_std_error_format("irq (set|nowait|wait|clear) <irq_num> (rel)", line_words);
         }
 
         u8 clr = 0;
@@ -629,7 +629,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
     else if (is_slice_equal_to_str(words.items[0], "set")) {
 
         if (print_line_failed_many_few(3, 3, words)) {
-            // CHECK: What should happen here?
+            print_std_error_format("set <PINS|X|Y|PINDIRS> <val>", line_words);
         }
 
         u8 dest;

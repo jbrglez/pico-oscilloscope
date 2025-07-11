@@ -40,6 +40,13 @@ void print_stderror_slice_array(char *str_1, slice_array_t array, char *str_2) {
     fprintf(stderr, "%s", str_2);
 }
 
+
+void print_std_error_format(char *format, slice_array_t line_words) {
+    fprintf(stderr, RED "ERROR:" RESET " [Parsing failed] : Expected format: %s\n", format);
+    print_stderror_slice_array("Failed to parse line >", line_words, "\n");
+}
+
+
 void print_stderror_color_word_in_line(char *str_1, slice_array_t line, slice_t word, char *str_2) {
     fprintf(stderr, "%s ", str_1);
     for (i32 i = 0; i < line.length; i++) {
