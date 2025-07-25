@@ -64,7 +64,7 @@ typedef enum {
 
 
 typedef struct __attribute__((packed)) {
-    u8  bmRequestType;
+    u8 bmRequestType;
     u8  bRequest;
     u16 wValue;
     u16 wIndex;

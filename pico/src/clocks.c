@@ -6,40 +6,40 @@
 
 
 internal void xosc_init(void) {
-    xosc_hw->ctrl = 0xAA0;
-    xosc_hw->startup = 47; //  wait ~1ms on startup
-    hw_set_bits(&xosc_hw->ctrl, 0xFAB000); // enable
-    while(!(xosc_hw->status & (1<<31)));
+    xosc_hw->ctrl = XOSC_CTRL_FREQ_RANGE_1MHZ_15MHZ;
+    xosc_hw->startup = 47 << XOSC_STARTUP_DELAY_LSB; //  wait ~1ms on startup
+    hw_set_bits(&xosc_hw->ctrl, XOSC_CTRL_ENABLE);
+    while(!(xosc_hw->status & XOSC_STATUS_STABLE));
 }
 
 
 internal void pll_usb_init(void) {
-    // NOTE:  48 MHz
     hw_set_bits(&resets_hw->reset, RESET_PLL_USB);
     hw_clear_bits(&resets_hw->reset, RESET_PLL_USB);
     while(!(resets_hw->reset_done & RESET_PLL_USB));
 
-    pll_usb_hw->cs =  1;
+    // NOTE: Settings for operation at 48 MHz
+    pll_usb_hw->cs =  1 << PLL_CS_REFDIV_LSB;
     pll_usb_hw->fbdiv_int = 120;
-    hw_clear_bits(&pll_usb_hw->pwr, 0x21);
-    while (!(pll_usb_hw->cs & (1<<31)));
-    pll_usb_hw->prim = (6 << 16) | (5 << 12);
-    hw_clear_bits(&pll_usb_hw->pwr, 0x8);
+    hw_clear_bits(&pll_usb_hw->pwr, PLL_PWR_VCOPD | PLL_PWR_PD);
+    while (!(pll_usb_hw->cs & PLL_CS_LOCKED));
+    pll_usb_hw->prim = (6 << PLL_PRIM_POSTDIV1_LSB) | (5 << PLL_PRIM_POSTDIV2_LSB);
+    hw_clear_bits(&pll_usb_hw->pwr, PLL_PWR_POSTDIVPD);
 }
 
 
 internal void pll_sys_init(void) {
-    // NOTE:  126 MHz
     hw_set_bits(&resets_hw->reset, RESET_PLL_SYS);
     hw_clear_bits(&resets_hw->reset, RESET_PLL_SYS);
     while(!(resets_hw->reset_done & RESET_PLL_SYS));
 
-    pll_sys_hw->cs =  1;
+    // NOTE: Settings for operation at 126 MHz
+    pll_sys_hw->cs =  1 << PLL_CS_REFDIV_LSB;
     pll_sys_hw->fbdiv_int = 126;
-    hw_clear_bits(&pll_sys_hw->pwr, 0x21);
-    while (!(pll_sys_hw->cs & (1<<31)));
-    pll_sys_hw->prim = (6 << 16) | (2 << 12);
-    hw_clear_bits(&pll_sys_hw->pwr, 0x8);
+    hw_clear_bits(&pll_sys_hw->pwr, PLL_PWR_VCOPD | PLL_PWR_PD);
+    while (!(pll_sys_hw->cs & PLL_CS_LOCKED));
+    pll_sys_hw->prim = (6 << PLL_PRIM_POSTDIV1_LSB) | (2 << PLL_PRIM_POSTDIV2_LSB);
+    hw_clear_bits(&pll_sys_hw->pwr, PLL_PWR_POSTDIVPD);
 }
 
 
@@ -47,35 +47,38 @@ internal void clocks_init() {
     clocks_hw->resus.ctrl = 0;
     xosc_init();
 
-    hw_clear_bits(&clocks_hw->clk[clk_peri].ctrl, (1<<11));
-    hw_clear_bits(&clocks_hw->clk[clk_usb].ctrl,  (1<<11));
-    hw_clear_bits(&clocks_hw->clk[clk_adc].ctrl,  (1<<11));
+    hw_clear_bits(&clocks_hw->clk[clk_peri].ctrl, CLOCKS_CLK_ENABLE);
+    hw_clear_bits(&clocks_hw->clk[clk_usb].ctrl,  CLOCKS_CLK_ENABLE);
+    hw_clear_bits(&clocks_hw->clk[clk_adc].ctrl,  CLOCKS_CLK_ENABLE);
 
-    hw_write_masked(&clocks_hw->clk[clk_ref].ctrl, 2, 0b11);
-    while (!(clocks_hw->clk[clk_ref].selected & (1<<2)));
-    hw_clear_bits(&clocks_hw->clk[clk_sys].ctrl, 1);
-    while (!(clocks_hw->clk[clk_sys].selected & (1<<0)));
+    hw_write_masked(&clocks_hw->clk[clk_ref].ctrl, CLOCKS_CLK_REF_CTRL_SRC_XOSC, CLOCKS_CLK_REF_CTRL_SRC_BITS);
+    while (!(clocks_hw->clk[clk_ref].selected & CLOCKS_CLK_REF_SELECTED_CLK_XOSC));
+    hw_write_masked(&clocks_hw->clk[clk_sys].ctrl, CLOCKS_CLK_SYS_CTRL_SRC_REF, CLOCKS_CLK_SYS_CTRL_SRC_BITS);
+    while (!(clocks_hw->clk[clk_sys].selected & CLOCKS_CLK_SYS_SELECTED_CLK_REF));
 
     pll_sys_init();
     pll_usb_init();
 
-    hw_clear_bits(&clocks_hw->clk[clk_sys].ctrl, (0xF<<5));
-    hw_set_bits(&clocks_hw->clk[clk_sys].ctrl, 1);
-    while (!(clocks_hw->clk[clk_sys].selected & (1<<1)));
+    hw_write_masked(&clocks_hw->clk[clk_sys].ctrl, CLOCKS_CLK_SYS_CTRL_AUXSRC_PLL_SYS, CLOCKS_CLK_CTRL_AUXSRC_BITS);
+    hw_write_masked(&clocks_hw->clk[clk_sys].ctrl, CLOCKS_CLK_SYS_CTRL_SRC_AUX, CLOCKS_CLK_SYS_CTRL_SRC_BITS);
+    while (!(clocks_hw->clk[clk_sys].selected & CLOCKS_CLK_SYS_SELECTED_CLK_AUX));
 
-    clocks_hw->clk[clk_peri].ctrl = (1<<11) | (2<<5);
-    clocks_hw->clk[clk_usb].ctrl  = (1<<11) | (0<<5);
-    clocks_hw->clk[clk_adc].ctrl  = (1<<11) | (0<<5);
+    clocks_hw->clk[clk_peri].ctrl = CLOCKS_CLK_ENABLE | CLOCKS_CLK_PERI_CTRL_AUXSRC_PLL_USB;
+    clocks_hw->clk[clk_usb].ctrl  = CLOCKS_CLK_ENABLE | CLOCKS_CLK_USB_CTRL_AUXSRC_PLL_USB;
+    clocks_hw->clk[clk_adc].ctrl  = CLOCKS_CLK_ENABLE | CLOCKS_CLK_ADC_CTRL_AUXSRC_PLL_USB;
 
     // Enable tick generation every 1us for timer (clk_ref: 12MHz)
     watchdog_hw->tick = (1<<9) | 12;
 }
 
 
-// NOTE: Predictable/Safe when only one core can call at a time.
 internal u64 time_us(void) {
-    u32 low = timer_hw->timelr;
-    u32 high = timer_hw->timehr;
+    u32 hi_prev = timer_hw->timerawh;
+    u32 low = timer_hw->timerawl;
+    u32 high = timer_hw->timerawh;
+    if (high != hi_prev) {
+        low = timer_hw->timerawl;
+    }
     return ((u64)high << 32) | low;
 }
 
@@ -89,24 +92,6 @@ internal void busy_wait_us(u64 wait_us) {
 
 internal u64 time_s(void) {
     return divide_u64(time_us(), 1000000, 0);
-}
-
-
-internal u64 time_safe_us(void) {
-    u32 hi_prev = timer_hw->timerawh;
-    u32 low = timer_hw->timerawl;
-    u32 high = timer_hw->timerawh;
-    if (high != hi_prev) {
-        low = timer_hw->timerawl;
-    }
-    return ((u64)high << 32) | low;
-}
-
-
-internal void busy_wait_safe_us(u64 wait_us) {
-    u64 start = time_safe_us();
-    u64 end = start + wait_us;
-    while (time_safe_us() < end);
 }
 
 

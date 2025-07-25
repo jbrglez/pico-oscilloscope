@@ -20,8 +20,8 @@ internal void uart_init(void) {
     uart0_hw->ibrd = ibrd;
     uart0_hw->fbrd = fbrd;
 
-    uart0_hw->lcr_h = (3<<5) | (1<<4);
-    uart0_hw->cr = (1<<9) | (1<<8) | (1<<0);
+    uart0_hw->lcr_h = UART_LINE_CTRL_REG_WORD_LEN_8BIT | UART_LINE_CTRL_REG_ENABLE_FIFOS;
+    uart0_hw->cr = UART_CTRL_REG_RECEIVE_ENABLE | UART_CTRL_REG_TRANSMIT_ENABLE | UART_CTRL_REG_UART_ENABLE;
 
     io_bank0_hw->io[UART_TX_PIN].ctrl = GPIO_FUNC_UART;
     io_bank0_hw->io[UART_RX_PIN].ctrl = GPIO_FUNC_UART;
@@ -29,13 +29,13 @@ internal void uart_init(void) {
 
 
 internal char uart_get(void) {
-    while(uart0_hw->fr & (1<<4));
+    while(uart0_hw->fr & UART_FLAG_REG_RX_FIFO_EMPTY);
     return uart0_hw->dr;
 }
 
 
 internal i32 uart_get_non_blocking(void) {
-    if (uart0_hw->fr & (1<<4))
+    if (uart0_hw->fr & UART_FLAG_REG_RX_FIFO_EMPTY)
         return uart0_hw->dr;
     else 
         return -1;
@@ -43,7 +43,7 @@ internal i32 uart_get_non_blocking(void) {
 
 
 internal void uart_send(char c) {
-    while(uart0_hw->fr & (1<<5));
+    while(uart0_hw->fr & UART_FLAG_REG_TX_FIFO_FULL);
     uart0_hw->dr = (i32)c;
 }
 

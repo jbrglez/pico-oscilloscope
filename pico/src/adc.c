@@ -10,30 +10,33 @@
 #include "usb.h"
 #include "usb_ep.h"
 
+#define GPIO_ADC_0 26u
+#define GPIO_ADC_1 27u
+
 
 internal void init_adc(void) {
     hw_set_bits(&resets_hw->reset, RESET_ADC);
     hw_clear_bits(&resets_hw->reset, RESET_ADC);
     while (!(resets_hw->reset_done & RESET_ADC));
 
-    adc_hw->cs = 1;
+    adc_hw->cs = ADC_CS_EN;
 
-    while (!(adc_hw->cs & (1<<8)));
+    while (!(adc_hw->cs & ADC_CS_READY));
 
-    io_bank0_hw->io[26].ctrl = GPIO_FUNC_NULL;
-    io_bank0_hw->io[27].ctrl = GPIO_FUNC_NULL;
-    pads_bank0_hw->io[26] = (1<<6);
-    pads_bank0_hw->io[27] = (1<<6);
+    io_bank0_hw->io[GPIO_ADC_0].ctrl = GPIO_FUNC_NULL;
+    io_bank0_hw->io[GPIO_ADC_1].ctrl = GPIO_FUNC_NULL;
+    pads_bank0_hw->io[GPIO_ADC_0] = PADS_BANK0_IO_INPUT_ENABLE;
+    pads_bank0_hw->io[GPIO_ADC_1] = PADS_BANK0_IO_INPUT_ENABLE;
 
-    adc_hw->cs = (0<<12) | (1<<0);
-    adc_hw->fcs = (1<<24) | (1<<3) | (1<<1) | (1<<0);
+    adc_hw->cs = (0 << ADC_CS_AINSEL_LSB) | ADC_CS_EN;
+    adc_hw->fcs = (1 << ADC_FCS_TRESH_LSB) | ADC_FCS_DREQ_EN | ADC_FCS_SHIFT | ADC_FCS_EN;
 }
 
 
 internal u16 adc_get_sample() {
-    while(!(adc_hw->cs & (1<<8)));
-    hw_set_bits(&adc_hw->cs, (1<<2));
-    while(!(adc_hw->cs & (1<<8)));
+    while(!(adc_hw->cs & ADC_CS_READY));
+    hw_set_bits(&adc_hw->cs, ADC_CS_START_ONCE);
+    while(!(adc_hw->cs & ADC_CS_READY));
     return adc_hw->result;
 }
 
@@ -113,12 +116,12 @@ internal new_sample_batch_t adc_get_new_sample_batch(void) {
 
 
 internal void adc_stop_dma_transfers_running(void) {
-    hw_clear_bits(&adc_hw->cs, (1<<3));
+    hw_clear_bits(&adc_hw->cs, ADC_CS_START_MANY);
 }
 
 
 internal void adc_stop_capturing(void) {
-    hw_clear_bits(&adc_hw->cs, (1<<10) | (1<<3) | (1<<2));
+    hw_clear_bits(&adc_hw->cs, ADC_CS_ERR_STICKY | ADC_CS_START_MANY | ADC_CS_START_ONCE);
     hw_clear_bits(&dma_hw->inte1, 1 << DMA_ADC_CH);
     dma_hw->abort = 1 << DMA_ADC_CH;
     while(dma_hw->abort);
@@ -133,9 +136,9 @@ internal void adc_start_capture_ep4(u16 num) {
     ep4_ADMA.num_writes = 0;
     ep4_ADMA.num_reads = 0;
 
-    hw_clear_bits(&adc_hw->cs, (1<<3) | (1<<2));
-    while(!(adc_hw->cs & (1<<8)));
-    while(!(adc_hw->fcs & (1<<8))) {
+    hw_clear_bits(&adc_hw->cs, ADC_CS_START_MANY | ADC_CS_START_ONCE);
+    while(!(adc_hw->cs & ADC_CS_READY));
+    while(!(adc_hw->fcs & ADC_FCS_EMPTY)) {
         // Clear out the ADC FIFO if not empty.
         u32 _unused = adc_hw->fifo;
     }
@@ -145,13 +148,13 @@ internal void adc_start_capture_ep4(u16 num) {
 #endif
 
     if (num == 0b01) {
-        hw_write_masked(&adc_hw->cs, (0<<16) | (0<<12), (0b11111<<16) | (0b111<<12));
+        hw_write_masked(&adc_hw->cs, (0 << ADC_CS_RROBIN_LSB) | (0 << ADC_CS_AINSEL_LSB), (0b11111 << ADC_CS_RROBIN_LSB) | (0b111 << ADC_CS_AINSEL_LSB));
     }
     else if (num == 0b10) {
-        hw_write_masked(&adc_hw->cs, (0<<16) | (1<<12), (0b11111<<16) | (0b111<<12));
+        hw_write_masked(&adc_hw->cs, (0 << ADC_CS_RROBIN_LSB) | (1 << ADC_CS_AINSEL_LSB), (0b11111 << ADC_CS_RROBIN_LSB) | (0b111 << ADC_CS_AINSEL_LSB));
     }
     else if (num == 0b11) {
-        hw_write_masked(&adc_hw->cs, (0b11<<16) | (0<<12), (0b11111<<16) | (0b111<<12));
+        hw_write_masked(&adc_hw->cs, (0b11 << ADC_CS_RROBIN_LSB) | (0 << ADC_CS_AINSEL_LSB), (0b11111 << ADC_CS_RROBIN_LSB) | (0b111 << ADC_CS_AINSEL_LSB));
     }
     else {
         return;
@@ -159,7 +162,7 @@ internal void adc_start_capture_ep4(u16 num) {
 
     dma_hw->ch[DMA_ADC_CH].transfer_count = (1<<11);
     dma_hw->ch[DMA_ADC_CH].al2_write_addr_trig = (u32)endp4_in.data_buffer;
-    hw_set_bits(&adc_hw->cs, (1<<3));
+    hw_set_bits(&adc_hw->cs, ADC_CS_START_MANY);
 }
 
 
@@ -187,7 +190,7 @@ internal void adc_dma_isr(void) {
         dma_hw->ch[DMA_ADC_CH].al2_write_addr_trig = (u32)endp4_in.data_buffer;
     }
     else {
-        hw_clear_bits(&adc_hw->cs, (1<<10) | (1<<3) | (1<<2));
+        hw_clear_bits(&adc_hw->cs, ADC_CS_ERR_STICKY | ADC_CS_START_MANY | ADC_CS_START_ONCE);
         DBG_str(&dbg0, "Stopped ADC capturing.\n");
 
 #if defined(DBG_LOG) && defined(DBG_USB_EP4_XFER)

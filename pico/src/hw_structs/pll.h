@@ -7,6 +7,17 @@
 #define _HARDWARE_STRUCTS_PLL_H
 
 
+#define PLL_CS_LOCKED (1u << 31u)
+#define PLL_CS_REFDIV_LSB 0u
+
+#define PLL_PWR_VCOPD (1u << 5u)
+#define PLL_PWR_POSTDIVPD (1u << 3u)
+#define PLL_PWR_DSMPD (1u << 2u)
+#define PLL_PWR_PD (1u << 0u)
+
+#define PLL_PRIM_POSTDIV1_LSB 16u
+#define PLL_PRIM_POSTDIV2_LSB 12u
+
 typedef struct {
     io_rw_32 cs;
     io_rw_32 pwr;

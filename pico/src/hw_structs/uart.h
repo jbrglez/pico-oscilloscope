@@ -6,6 +6,17 @@
 #ifndef _HARDWARE_STRUCTS_UART_H
 #define _HARDWARE_STRUCTS_UART_H
 
+#define UART_FLAG_REG_TX_FIFO_FULL (1u << 5u)
+#define UART_FLAG_REG_RX_FIFO_EMPTY (1u << 4u)
+
+#define UART_LINE_CTRL_REG_WORD_LEN_8BIT (3u << 5u)
+#define UART_LINE_CTRL_REG_WORD_LEN_7BIT (2u << 5u)
+#define UART_LINE_CTRL_REG_WORD_LEN_6BIT (1u << 5u)
+#define UART_LINE_CTRL_REG_ENABLE_FIFOS (1u << 4u)
+
+#define UART_CTRL_REG_RECEIVE_ENABLE (1u << 9u)
+#define UART_CTRL_REG_TRANSMIT_ENABLE (1u << 8u)
+#define UART_CTRL_REG_UART_ENABLE (1u << 0u)
 
 typedef struct {
     io_rw_32 dr;

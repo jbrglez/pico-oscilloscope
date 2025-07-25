@@ -7,6 +7,14 @@
 #define _HARDWARE_STRUCTS_XOSC_H
 
 
+#define XOSC_STATUS_STABLE (1u<<31u)
+
+#define XOSC_CTRL_ENABLE (0xFAB<<12u)
+#define XOSC_CTRL_DISABLE (0xD1E<<12u)
+#define XOSC_CTRL_FREQ_RANGE_1MHZ_15MHZ (0xAA0<<0u)
+
+#define XOSC_STARTUP_DELAY_LSB 0u
+
 typedef struct {
     io_rw_32 ctrl;
     io_rw_32 status;

@@ -6,6 +6,16 @@
 #ifndef _HARDWARE_STRUCTS_PADS_BANK0_H
 #define _HARDWARE_STRUCTS_PADS_BANK0_H
 
+#define PADS_BANK0_IO_OUTPUT_DISABLE (1u << 7u)
+#define PADS_BANK0_IO_INPUT_ENABLE (1u << 6u)
+#define PADS_BANK0_IO_DRIVE_2MA  (0u << 4u)
+#define PADS_BANK0_IO_DRIVE_4MA  (1u << 4u)
+#define PADS_BANK0_IO_DRIVE_8MA  (2u << 4u)
+#define PADS_BANK0_IO_DRIVE_12MA (3u << 4u)
+#define PADS_BANK0_IO_PULL_UP_EN (1u << 3u)
+#define PADS_BANK0_IO_PULL_DOWN_EN (1u << 2u)
+#define PADS_BANK0_IO_SCHMITT (1u << 1u)
+#define PADS_BANK0_IO_SLEWFAST (1u << 0u)
 
 typedef struct {
     io_rw_32 voltage_select;

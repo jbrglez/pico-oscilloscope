@@ -49,21 +49,42 @@ internal void dma_configure_transfers(void) {
     }
 
     dma_hw->inte1 = (1 << DMA_ADC_CH) | (1 << DMA_SIG_COPY_CH);
-    dma_hw->ch[DMA_SIG_COPY_CH].al1_ctrl = (0x3f << 15) | (DMA_SIG_COPY_CH << 11) | (1<<5) | (1<<4) | (2<<2) | (1<<0);
+    dma_hw->ch[DMA_SIG_COPY_CH].al1_ctrl = (DREQ_PERMANENT << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                           (DMA_SIG_COPY_CH << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                           DMA_CH_CTRL_INCR_WRITE |
+                                           DMA_CH_CTRL_INCR_READ |
+                                           DMA_CH_CTRL_DATA_SIZE_WORD |
+                                           DMA_CH_CTRL_EN;
 
     dma_hw->ch[DMA_ADC_CH].read_addr  = (u32)(&adc_hw->fifo);
     dma_hw->ch[DMA_ADC_CH].write_addr = ((u32)usb_dpram + (1<<11));
     dma_hw->ch[DMA_ADC_CH].transfer_count = (1<<11);
-    dma_hw->ch[DMA_ADC_CH].al1_ctrl = (36<<15) | (DMA_ADC_CH << 11) | (1<<10) | (11<<6) | (1<<5) | (0<<2) | (1<<0);
+    dma_hw->ch[DMA_ADC_CH].al1_ctrl = (DREQ_ADC << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                       (DMA_ADC_CH << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                       DMA_CH_CTRL_RING_SEL_WRITE |
+                                       (11<<DMA_CH_CTRL_RING_SIZE_LSB) |
+                                       DMA_CH_CTRL_INCR_WRITE |
+                                       DMA_CH_CTRL_DATA_SIZE_BYTE |
+                                       DMA_CH_CTRL_EN;
 
     // adc_hw->div = (47999<<8);       // Set Sampling Rate / Clock Divider
     // adc_hw->fcs = (1<<24) | (1<<3) | (1<<1) | (1<<0);
 
     dma_hw->inte0 = (1 << DMA_PIO_CH_1) | (1 << DMA_PIO_CH_2);
     dma_hw->ch[DMA_PIO_CH_1].write_addr = (u32)(&pio0_hw->txf[0]);
-    dma_hw->ch[DMA_PIO_CH_1].al1_ctrl = (0<<21) | (0<<15) | (DMA_PIO_CH_2 << 11) | (0<<5) | (1<<4) | (0<<2) | (1<<1) | (1<<0);
+    dma_hw->ch[DMA_PIO_CH_1].al1_ctrl = (DREQ_PIO0_TX0 << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                        (DMA_PIO_CH_2 << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                        DMA_CH_CTRL_INCR_READ |
+                                        DMA_CH_CTRL_DATA_SIZE_BYTE |
+                                        DMA_CH_CTRL_HIGH_PRIORITY |
+                                        DMA_CH_CTRL_EN;
     dma_hw->ch[DMA_PIO_CH_2].write_addr = (u32)(&pio0_hw->txf[0]);
-    dma_hw->ch[DMA_PIO_CH_2].al1_ctrl = (0<<21) | (0<<15) | (DMA_PIO_CH_1 << 11) | (0<<5) | (1<<4) | (0<<2) | (1<<1) | (1<<0);
+    dma_hw->ch[DMA_PIO_CH_2].al1_ctrl = (DREQ_PIO0_TX0 << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                        (DMA_PIO_CH_1 << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                        DMA_CH_CTRL_INCR_READ |
+                                        DMA_CH_CTRL_DATA_SIZE_BYTE |
+                                        DMA_CH_CTRL_HIGH_PRIORITY |
+                                        DMA_CH_CTRL_EN;
 }
 
 

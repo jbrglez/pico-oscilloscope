@@ -65,27 +65,27 @@ internal endp_t *get_ep_by_addr(u32 addr) {
 
 internal void ep_stall(endp_t *ep) {
     if (ep->id == 0) {
-        hw_set_bits(&usb_hw->ep_stall_arm, (ep->dir == 1) ? (1<<0) : (1<<1));
+        hw_set_bits(&usb_hw->ep_stall_arm, (ep->dir == 1) ? USB_EP_STALL_ARM_EP0_IN : USB_EP_STALL_ARM_EP0_OUT);
     }
-    *ep->buf_ctrl |= (1<<11);
+    *ep->buf_ctrl |= USB_BUF_CTRL_STALL;
 }
 
 
 internal void ep_clear_stall(endp_t *ep) {
     // if (ep->id != 0) {
     ep->next_data_pid = 0;
-    usb_dpram->ep_buf_ctrl[ep->id].in &= ~(1<<11);
+    usb_dpram->ep_buf_ctrl[ep->id].in &= ~USB_BUF_CTRL_STALL;
     // }
 }
 
 
 internal void ep_transfer(endp_t *ep, u32 len) {
-    u32 val = (ep->dir << 15) | (ep->next_data_pid << 13) | len;
+    u32 val = (ep->dir << USB_BUF_CTRL_BUFFER_FULL_LSB) | (ep->next_data_pid << USB_BUF_CTRL_DATA_PID_LSB) | len;
     *ep->buf_ctrl = val;
     asm volatile("nop");
     asm volatile("nop");
     asm volatile("nop");
-    *ep->buf_ctrl = val | (1<<10);
+    *ep->buf_ctrl = val | USB_BUF_CTRL_AVAIL;
 }
 
 
@@ -104,21 +104,33 @@ internal void init_usb(void) {
         nvic_hw->iser = USBCTRL_IRQ;
     }
 
-    usb_hw->muxing = (1<<3) | (1<<0);
-    usb_hw->pwr = (1<<3) | (1<<2);      // Force VBUS detect so the device thinks it is plugged into a host
-    usb_hw->main_ctrl = (1<<0);
+    usb_hw->muxing = USB_MUXING_SOFTCON | USB_MUXING_TO_PHY;
+    usb_hw->pwr = USB_PWR_VBUS_DETECT_OVERRIDE_EN | USB_PWR_VBUS_DETECT;      // Force VBUS detect so the device thinks it is plugged into a host
+    usb_hw->main_ctrl = USB_MAIN_CTRL_MODE_DEVICE | USB_MAIN_CTRL_MODE_CONTROLLER_EN;
     // usb_hw->sie_ctrl = (1<<29);         // Enable an interrupt per EP0 transaction
     // usb_hw->inte = (1<<19) | (1<<16) | (1<<12) | (1<<4);
-    usb_hw->sie_ctrl = (1<<31) | (1<<29);
+    usb_hw->sie_ctrl = USB_SIE_CTRL_EP0_INT_STALL | USB_SIE_CTRL_EP0_INT_1BUF;
     usb_hw->inte = USB_INTS_EP_STALL_NAK | USB_INTS_SETUP_REQ |
                    USB_INTS_BUS_RESET | USB_INTS_BUFF_STATUS;
 
-    usb_dpram->ep_ctrl[0].out = (1<<31) | (1<<29) | (endp1_out.descriptor->bmAttributes << 26) | DPRAM_OFFSET(endp1_out.data_buffer);
-    usb_dpram->ep_ctrl[1].in  = (1<<31) | (1<<29) | ( endp2_in.descriptor->bmAttributes << 26) | DPRAM_OFFSET(endp2_in.data_buffer);
-    usb_dpram->ep_ctrl[2].in  = (1<<31) | (1<<29) | ( endp3_in.descriptor->bmAttributes << 26) | DPRAM_OFFSET(endp3_in.data_buffer);
-    usb_dpram->ep_ctrl[3].in  = (1<<31) | (1<<29) | ( endp4_in.descriptor->bmAttributes << 26) | DPRAM_OFFSET(endp4_in.data_buffer);
+    usb_dpram->ep_ctrl[0].out = USB_EP_CTRL_ENABLE |
+                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
+                                (endp1_out.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
+                                DPRAM_OFFSET(endp1_out.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
+    usb_dpram->ep_ctrl[1].in =  USB_EP_CTRL_ENABLE |
+                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
+                                ( endp2_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
+                                DPRAM_OFFSET(endp2_in.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
+    usb_dpram->ep_ctrl[2].in =  USB_EP_CTRL_ENABLE |
+                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
+                                ( endp3_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
+                                DPRAM_OFFSET(endp3_in.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
+    usb_dpram->ep_ctrl[3].in =  USB_EP_CTRL_ENABLE |
+                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
+                                ( endp4_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
+                                DPRAM_OFFSET(endp4_in.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
 
-    hw_set_bits(&usb_hw->sie_ctrl, (1<<16));
+    hw_set_bits(&usb_hw->sie_ctrl, USB_SIE_CTRL_PULLUP_EN);
 
     usb_hw->main_ctrl = 1;
 }
@@ -127,9 +139,9 @@ internal void init_usb(void) {
 internal void endp4_next_transfer(void) {
     new_sample_batch_t new_samples_batch = adc_get_new_sample_batch();
 
-    usb_dpram->ep_ctrl[3].in  = (1<<31) | (1<<29) 
-        | ( ep4_in.bmAttributes << 26) 
-        | new_samples_batch.start_offset_into_usb_dpram;
+    usb_dpram->ep_ctrl[3].in  = USB_EP_CTRL_ENABLE | USB_EP_CTRL_INTERRUPT_PER_BUFFER
+        | ( ep4_in.bmAttributes << USB_EP_CTRL_EP_TYPE_LSB)
+        | new_samples_batch.start_offset_into_usb_dpram << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
 
     ep_transfer(&endp4_in, new_samples_batch.size);
     endp4_in.next_data_pid ^= 1;

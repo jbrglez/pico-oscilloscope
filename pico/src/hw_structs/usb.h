@@ -7,6 +7,25 @@
 #define _HARDWARE_STRUCTS_USB_H
 
 
+
+#define USB_MAIN_CTRL_MODE_HOST   (1u << 1u)
+#define USB_MAIN_CTRL_MODE_DEVICE (0u << 1u)
+#define USB_MAIN_CTRL_MODE_CONTROLLER_EN (1u << 0u)
+
+#define USB_SIE_CTRL_EP0_INT_STALL (1u << 31u)
+#define USB_SIE_CTRL_EP0_INT_1BUF  (1u << 29u)
+#define USB_SIE_CTRL_PULLUP_EN     (1u << 16u)
+
+#define USB_EP_STALL_ARM_EP0_IN  (1u << 0u)
+#define USB_EP_STALL_ARM_EP0_OUT (1u << 1u)
+
+#define USB_MUXING_SOFTCON (1u << 3u)
+#define USB_MUXING_TO_PHY  (1u << 0u)
+
+#define USB_PWR_VBUS_DETECT_OVERRIDE_EN (1u << 3u)
+#define USB_PWR_VBUS_DETECT (1u << 2u)
+
+
 typedef struct {
     io_rw_32 dev_addr_ctrl;
     io_rw_32 int_ep_addr_ctrl[15];
