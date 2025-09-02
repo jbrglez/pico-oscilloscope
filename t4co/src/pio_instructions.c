@@ -30,6 +30,21 @@ typedef enum {
 } pio_directive_num;
 
 
+enum pio_src_dest {
+    pio_pins = 0u,
+    pio_x = 1u,
+    pio_y = 2u,
+    pio_null = 3u,
+    pio_pindirs = 4u,
+    pio_exec_mov = 4u,
+    pio_status = 5u,
+    pio_pc = 5u,
+    pio_isr = 6u,
+    pio_osr = 7u,
+    pio_exec_out = 7u,
+};
+
+
 typedef union {
     struct {
         union {

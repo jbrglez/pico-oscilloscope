@@ -215,7 +215,7 @@ void split_slice_multiple(slice_array_t *array, slice_t sequence, slice_t split_
 b32 parse_number_u8(slice_t slice, u8 *result) {
     u8 val = 0;
     if (slice_begins_with(slice, SLICE_FROM_STRING("0x"))) {
-        for (int i = 0; i < slice.len; i++) {
+        for (int i = 2; i < slice.len; i++) {
             val *= 16;
             char ch = slice.str[i];
 
@@ -228,7 +228,7 @@ b32 parse_number_u8(slice_t slice, u8 *result) {
         return TRUE;
     }
     else if (slice_begins_with(slice, SLICE_FROM_STRING("0o"))) {
-        for (int i = 0; i < slice.len; i++) {
+        for (int i = 2; i < slice.len; i++) {
             val *= 8;
             char ch = slice.str[i];
             if ('0' <= ch && ch <= '8') { val += ch - '0'; }
@@ -238,7 +238,7 @@ b32 parse_number_u8(slice_t slice, u8 *result) {
         return TRUE;
     }
     else if (slice_begins_with(slice, SLICE_FROM_STRING("0b"))) {
-        for (int i = 0; i < slice.len; i++) {
+        for (int i = 2; i < slice.len; i++) {
             val *= 2;
             if (slice.str[i] == '1') { val += 1; }
             if (slice.str[i] != '0') { return FALSE; }

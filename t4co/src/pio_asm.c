@@ -273,6 +273,7 @@ pio_op_t parse_instruction(slice_array_t words, parse_prog_t parse_prog, pio_pro
         if (parse_number_u8(target_sl, &addr)) {
         }
         else if (get_label_value_from_parse_prog(&parse_prog, target_sl, &addr)) {
+            addr += program->settings.origin;
         }
         else {
             print_std_error("Incorrect value", "JMP address must be a number or defined label\n");
@@ -1030,6 +1031,11 @@ pio_program_t parse_program_file(file_contents_t program_file) {
         split_slice_multiple(&words, lines.items[i], blank_space, FALSE);
         parse_instruction(words, parse_prog, &program);
         words.length = 0;
+    }
+
+    if (program.settings.origin + program.settings.length > 32) {
+        fprintf(stderr, "ERROR: [Out of memory]: Program with origin at %d and with %d instructions gets out of available memory.\n",
+                program.settings.origin, program.settings.length);
     }
 
     free_slice_array(&words);
