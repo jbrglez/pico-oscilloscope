@@ -6,6 +6,9 @@
 #ifndef _HARDWARE_STRUCTS_SIO_H
 #define _HARDWARE_STRUCTS_SIO_H
 
+#define SIO_DIV_CSR_READY (1u<<0u)
+#define SIO_DIV_CSR_DIRTY (1u<<1u)
+
 
 typedef struct {
     io_ro_32 cpuid;
