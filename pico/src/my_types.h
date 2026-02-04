@@ -24,6 +24,7 @@ typedef int32_t b32;
 #define internal static
 #define global   static
 
+#define NULL ((void *)0)
 
 #define MIN(a,b) (((a)<(b) ? (a) : (b)))
 #define MAX(a,b) (((a)>(b) ? (a) : (b)))

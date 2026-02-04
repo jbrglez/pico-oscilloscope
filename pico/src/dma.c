@@ -31,6 +31,66 @@ void isr_dma_1(void) {
                     sig_buffers_PIO.status = SIG_BUF_NORMAL;
                 }
             }
+#ifdef CONFIG_USE_UART
+            else if (i == DMA_UART_CH) {
+
+                hw_clear_bits(&dma_hw->intf1, 1<<DMA_UART_CH);
+                uart_dma_active = 1;
+
+                u32 idx = uart_msg_idx_next_read;
+
+                if (uart_msgs[idx].msg_status == MSG_STATUS_READY) {
+
+                    u32 next_idx = idx + 1;
+                    uart_msg_idx_next_read = (next_idx == UART_MAX_NUM_DMA_MSG_BLOCKS) ? 0 : next_idx;
+
+                    uart_msgs[idx].msg_status = MSG_STATUS_DONE;
+
+                    u32 type = uart_msgs[idx].type;
+                    if (type == U_TYPE_str) {
+                        dma_hw->ch[DMA_UART_CH].read_addr = (u32)uart_msgs[idx].msg;
+                        dma_hw->ch[DMA_UART_CH].al1_transfer_count_trig = (u32)uart_msgs[idx].len;
+                    }
+                    else if (type == U_TYPE_u32) {
+                        u32 d = uart_msgs[idx].hex;
+                        u32 n;
+                        msg_hex_buf[0] = '0';
+                        msg_hex_buf[1] = 'x';
+                        char *str = &msg_hex_buf[2];
+                        for(i32 c = 28; c >= 0; c -= 4) {
+                            n = (d>>c) & 0xF;
+                            n += n>9 ? 0x37 : 0x30;
+                            *str++ = (char)n;
+                        }
+
+                        dma_hw->ch[DMA_UART_CH].read_addr = (u32)&msg_hex_buf[0];
+                        dma_hw->ch[DMA_UART_CH].al1_transfer_count_trig = 10;
+                    }
+                }
+                else {
+                    uart_dma_active = 0;
+                }
+
+            }
+            else if (i == DMA_UART1_CH) {
+
+                hw_clear_bits(&dma_hw->intf1, 1<<DMA_UART1_CH);
+                murbuf_G.active = 1;
+
+                static u32 prev_size = 0;
+                u32 offset = ((u32)murbuf_G.getp + prev_size) & murbuf_G.buf_mask;
+                murbuf_G.getp = murbuf_G.start + offset;
+
+                u32 next_size = ((u32)murbuf_G.putp - (u32)murbuf_G.getp) & murbuf_G.buf_mask;
+                prev_size = next_size;
+
+                if (next_size != 0)
+                    // dma_hw->ch[DMA_UART1_CH].read_addr = (u32)murbuf_G.getp;
+                    dma_hw->ch[DMA_UART1_CH].al1_transfer_count_trig = next_size;
+                else
+                    murbuf_G.active = 0;
+            }
+#endif
         }
     }
 }
@@ -48,13 +108,42 @@ internal void dma_configure_transfers(void) {
         nvic_hw->iser = DMA_IRQ_1;
     }
 
+#ifdef CONFIG_USE_UART
+    dma_hw->inte1 = (1 << DMA_UART1_CH) | (1 << DMA_UART_CH) | (1 << DMA_ADC_CH) | (1 << DMA_SIG_COPY_CH);
+#else
     dma_hw->inte1 = (1 << DMA_ADC_CH) | (1 << DMA_SIG_COPY_CH);
+#endif
+
     dma_hw->ch[DMA_SIG_COPY_CH].al1_ctrl = (DREQ_PERMANENT << DMA_CH_CTRL_TREQ_SEL_LSB) |
                                            (DMA_SIG_COPY_CH << DMA_CH_CTRL_CHAIN_TO_LSB) |
                                            DMA_CH_CTRL_INCR_WRITE |
                                            DMA_CH_CTRL_INCR_READ |
                                            DMA_CH_CTRL_DATA_SIZE_WORD |
                                            DMA_CH_CTRL_EN;
+
+
+#ifdef CONFIG_USE_UART
+    // UART
+    dma_hw->ch[DMA_UART_CH].write_addr = (u32)(&uart0_hw->dr);
+    dma_hw->ch[DMA_UART_CH].al1_ctrl = (DREQ_UART0_TX << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                       (DMA_UART_CH << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                       DMA_CH_CTRL_INCR_READ |
+                                       DMA_CH_CTRL_DATA_SIZE_BYTE |
+                                       DMA_CH_CTRL_EN;
+
+
+
+    dma_hw->ch[DMA_UART1_CH].read_addr = (u32)murbuf_G.getp;
+    dma_hw->ch[DMA_UART1_CH].write_addr = (u32)(&uart1_hw->dr);
+    dma_hw->ch[DMA_UART1_CH].al1_ctrl = (DREQ_UART1_TX << DMA_CH_CTRL_TREQ_SEL_LSB) |
+                                       (DMA_UART1_CH << DMA_CH_CTRL_CHAIN_TO_LSB) |
+                                       DMA_CH_CTRL_RING_SEL_READ |
+                                       ((murbuf_G.buf_size_pow2) << DMA_CH_CTRL_RING_SIZE_LSB) |
+                                       DMA_CH_CTRL_INCR_READ |
+                                       DMA_CH_CTRL_DATA_SIZE_BYTE |
+                                       DMA_CH_CTRL_EN;
+#endif
+
 
     dma_hw->ch[DMA_ADC_CH].read_addr  = (u32)(&adc_hw->fifo);
     dma_hw->ch[DMA_ADC_CH].write_addr = ((u32)usb_dpram + (1<<11));
