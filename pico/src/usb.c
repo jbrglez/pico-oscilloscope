@@ -420,6 +420,7 @@ typedef enum {
     PICO_TEST_ADC = 4,
     PICO_NEW_SIGNAL = 5,
     PICO_GET_TEMPERATURE = 6,
+    PICO_STOP_RUNNING_CAPTURE = 7,
 } pico_request;
 
 
@@ -435,12 +436,8 @@ internal void usb_handle_setup_packet_vendor(void) {
     if (direction_IN) {
         switch (request) {
             case PICO_GET_OSCI_STATUS:
-                len = 32;
-                for (i32 i = 0; i < len; i++) {
-                    usb_dpram->ep0_buf_a[i] = global_var+i;
-                }
-                ep_transfer(&endp0_in, len);
-                // MIN(len, 0x3FF & setup_packet->wLength)
+                *(u8 *)usb_dpram->ep0_buf_a = global_var++;
+                ep_transfer(&endp0_in, 1);
                 break;
             case PICO_TEST_ADC:
                 *(u16 *)endp0_in.data_buffer = adc_get_sample();
@@ -471,6 +468,11 @@ internal void usb_handle_setup_packet_vendor(void) {
                 ) {
                     adc_start_capture_ep4(setup_packet->wValue);
                 }
+                ep_transfer(&endp0_in, 0);
+                break;
+
+            case PICO_STOP_RUNNING_CAPTURE:
+                adc_stop_capturing();
                 ep_transfer(&endp0_in, 0);
                 break;
 

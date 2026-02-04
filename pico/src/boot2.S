@@ -27,7 +27,7 @@ _stage2_boot:
     // NOTE:
     // We enable the flash, copy everything to SRAM and then disable the flash.
     // Since we don't use flash/XIP, 16KB of SRAM at 0x15000000,
-    // that would other wise be used as XIP cache, is now free for use.
+    // that would otherwise be used as XIP cache, is now free for use.
     bl enable_xip
     bl copy_flash_to_ram
     bl disable_xip
