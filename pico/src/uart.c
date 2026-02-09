@@ -5,6 +5,8 @@
 #include "hardware.h"
 #include "my_math.c"
 
+#include <stdarg.h>
+
 //#define UART_MAX_NUM_DMA_MSG_BLOCKS 256
 #define UART_MAX_NUM_DMA_MSG_BLOCKS 1024
 
@@ -93,8 +95,11 @@ internal void putsu_hex(u32 d)
 }
 
 
-internal void uprintf(const char *msgf, void *p)
+internal void uprintf(const char *msgf, ...)
 {
+    va_list args;
+    va_start(args, msgf);
+
     char c = *msgf;
     while (c != 0) {
         if (c != '%') {
@@ -104,13 +109,53 @@ internal void uprintf(const char *msgf, void *p)
             c = *msgf++;
             switch (c) {
                 case 's': {
-                    const char *msg = (const char *)p;
+                    const char *msg = va_arg(args, const char *);
                     while (*msg != 0)
                         put_char(*msg++);
                 } break;
 
                 case 'd': {
-                    u32 d = *((u32 *)p);
+                    i32 d = va_arg(args, i32);
+                    if (d < 0) {
+                        put_char('-');
+                        d = -d;
+                    }
+
+                    u32 u = (u32)d;
+                    u32 rem[10];
+
+                    u32 num_digits = 0;
+                    for (u32 i = 0; i < 10; i++) {
+                        u = divide_u32(u, 10, &rem[i]);
+                        num_digits++;
+                        if (u == 0)
+                            break;
+                    }
+
+                    for (u32 i = 1; i < num_digits+1; i++) {
+                        put_char((char)rem[num_digits - i] + '0');
+                    }
+                } break;
+
+                case 'u': {
+                    u32 u = va_arg(args, u32);
+                    u32 rem[10];
+
+                    u32 num_digits = 0;
+                    for (u32 i = 0; i < 10; i++) {
+                        u = divide_u32(u, 10, &rem[i]);
+                        num_digits++;
+                        if (u == 0)
+                            break;
+                    }
+
+                    for (u32 i = 1; i < num_digits+1; i++) {
+                        put_char((char)rem[num_digits - i] + '0');
+                    }
+                } break;
+
+                case 'x': {
+                    u32 d = va_arg(args, u32);
                     put_char('0');
                     put_char('x');
                     char n;
@@ -127,6 +172,8 @@ internal void uprintf(const char *msgf, void *p)
         }
         c = *msgf++;
     }
+
+    va_end(args);
 
     if (!murbuf_G.active)
         hw_set_bits(&dma_hw->intf1, 1<<DMA_UART1_CH);
@@ -350,7 +397,7 @@ internal void uart_puts_Dmsg(char *msg) {
 
 #define putsu(msg)
 #define putsu_hex(d)
-#define uprintf(msgf, p)
+#define uprintf(msgf, ...)
 #define uart1_init()
 
 #define uart_init()

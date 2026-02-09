@@ -132,6 +132,9 @@ int main() {
 #endif
 
     u32 cntr = 0;
+
+    uprintf("\r\n------------------------\r\n");
+
     while(1) {
         busy_wait_us(1000 * 1000);
         cntr++;
@@ -142,77 +145,6 @@ int main() {
         uart_puts("cntr : ");
         uart_hex(cntr);
         uart_puts("\r\n");
-
-
-        putsu_hex(cntr);
-        putsu(" hela\r\n");
-        char sta[] = "my name is Bu";
-        u32 t_vas = 0x123405;
-
-        uprintf(" heheho %s 3\r\n", sta);
-        uprintf(" he**** %d \r\n", &t_vas);
-        uprintf(" heheho\r\n", NULL);
-        // putsu("   : dkfj12\r\n");
-
-        // uart_puts_Dmsg("asdf\r\n\eD\e[0A");
-        // uart_puts_Dmsg("asdf\r\n");
-        // uart_puts_Dmsg("-p[ijsdfkj\r\n");
-
-#if 1
-        PUT_X(dma_hw->ch[DMA_UART_CH].read_addr);
-        PUT_X(dma_hw->ch[DMA_UART_CH].write_addr);
-        PUT_X(dma_hw->ch[DMA_UART_CH].transfer_count);
-        PUT_X(dma_hw->ch[DMA_UART_CH].ctrl_trig);
-        PUT_X(dma_debug_hw->ch[DMA_UART_CH].dbg_tcr);
-        uart_puts("\n");
-        PUT_X(uart_msg_idx_next_write);
-        PUT_X(uart_msg_idx_next_read);
-        PUT_X(uart_dma_active);
-        uart_puts("********\n");
-#endif
-
-#if 0
-        // uart_puts("\r\e[0J");
-
-        PUT_X(cntr);
-        PUT_X(murbuf_G.start);
-        PUT_X(murbuf_G.end);
-        PUT_X(murbuf_G.putp);
-        PUT_X(murbuf_G.getp);
-
-        PUT_X(dma_hw->ch[DMA_UART1_CH].read_addr);
-        PUT_X(dma_hw->ch[DMA_UART1_CH].write_addr);
-        PUT_X(dma_hw->ch[DMA_UART1_CH].transfer_count);
-        PUT_X(dma_hw->ch[DMA_UART1_CH].ctrl_trig);
-        PUT_X(dma_debug_hw->ch[DMA_UART1_CH].dbg_tcr);
-#endif
-
-#if 1
-        // uart_puts("msg_hex_buf addr : ");
-        // uart_hex((u32)&msg_hex_buf[0]);
-        // uart_puts("\r\n");
-
-        // uart_puts_DMA_hex(0x1234);
-        // PUT_X(dma_hw->intf1);
-
-        uart_puts_Dmsg("-p[ijsdfkj\r\n");
-        // uart_puts_DMA_hex(0x1234);
-        uart_puts_DMA_hex(cntr);
-        uart_puts_Dmsg(" -sdfkj\r\n");
-
-        // uart_puts("********\n");
-        // PUT_X(uart_msg_idx_next_write);
-        // PUT_X(uart_msg_idx_next_read);
-        // uart_puts_Dmsg("-p[ijsdfkj\r\n");
-
-        // PUT_CLEAR();
-
-        // uart_puts("\r\e[2A");
-        // uart_puts("\r\e[21A");
-#endif
-
-
-
 
 #if 0
 
@@ -364,57 +296,6 @@ int main() {
         uart_puts("\t length: ");
         uart_hex((u32)sig_buffers_PIO.inactive_buf->length);
 
-#if 0
-        i32 num_new_lines = 0;
-
-        uart_puts("\n");
-
-        #define SHOW_BUF_LEN 32
-        uart_puts("\n\t SIG_active:[0:]");
-        for (i32 i = 0; i < SHOW_BUF_LEN; i++) {
-            if ((i & 0xF) == 0) {
-                uart_puts("\n\t");
-                num_new_lines++;
-            }
-            uart_hex_8(sig_buffers_PIO.active_buf->data[i]);
-            uart_puts(" ");
-        }
-        uart_puts("\n\t SIG_active:[:-1]");
-        for (i32 i = SHOW_BUF_LEN; i > 0; i--) {
-            if ((i & 0xF) == 0) {
-                uart_puts("\n\t");
-                num_new_lines++;
-            }
-            uart_hex_8(sig_buffers_PIO.active_buf->data[sig_buffers_PIO.active_buf->length - i]);
-            uart_puts(" ");
-        }
-
-
-        uart_puts("\n");
-
-        uart_puts("\n\t SIG_inactive:[0:]");
-        for (i32 i = 0; i < SHOW_BUF_LEN; i++) {
-            if ((i & 0xF) == 0) {
-                uart_puts("\n\t");
-                num_new_lines++;
-            }
-            uart_hex_8(sig_buffers_PIO.inactive_buf->data[i]);
-            uart_puts(" ");
-        }
-        uart_puts("\n\t SIG_inactive:[:-1]");
-        for (i32 i = SHOW_BUF_LEN; i > 0; i--) {
-            if ((i & 0xF) == 0) {
-                uart_puts("\n\t");
-                num_new_lines++;
-            }
-            uart_hex_8(sig_buffers_PIO.active_buf->data[sig_buffers_PIO.active_buf->length - i]);
-            uart_puts(" ");
-        }
-
-        for (i32 i = 0; i < num_new_lines + 6; i++) {
-            uart_puts("\r\e[A");
-        }
-#endif
 
         uart_puts("\r\e[21A");
 #endif
