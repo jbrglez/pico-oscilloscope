@@ -19,6 +19,47 @@
 #define ID_VENDOR  0
 #define ID_PRODUCT 1
 
+#define NUM_USB_TRANSFERS 4
+#define NUM_USB_ISO_PACKETS 4
+#define USB_ISO_PACKET_SIZE 960
+#define recording_buf_len 0x20000
+#define data_buf_len 0x10000
+
+
+typedef struct {
+    u64 transferred;
+    u64 processed;
+
+    u16 *active_ch;
+    u16 *active_ch_rec;
+
+    u32 len;
+    f32 *data;
+
+    f32 *record_buf;
+    u32 record_len;
+    u32 recorded;
+
+    b32 start_triggered_recording;
+    f32 trig_val_relative;
+    u8 trig_val;
+    u8 trig_channel;
+} transfer_args_t;
+
+typedef struct {
+    u8 iso_buf[NUM_USB_TRANSFERS][NUM_USB_ISO_PACKETS * USB_ISO_PACKET_SIZE] __attribute__ ((aligned (64)));
+    u8 ctrl_buf[64] __attribute__ ((aligned (2)));
+    u8 ctrl_buf_signal[0x48]   __attribute__ ((aligned (2)));
+    u8 ctrl_buf_signal_2[0x48] __attribute__ ((aligned (2)));
+    libusb_device_handle *dev;
+    struct libusb_transfer *ctrl_transfer;
+    struct libusb_transfer *ctrl_transfer_signal;
+    struct libusb_transfer *USB_transfers[NUM_USB_TRANSFERS];
+    transfer_args_t *args;
+    pthread_t th_USB;
+} usb_stuf_t;
+
+
 
 typedef struct {
     i32 id;
@@ -98,7 +139,7 @@ void setup_queue(void) {
 
 
 
-void convert_copy_u8_to_f32(f32 *dest, u8 *src, i32 count) {
+internal void convert_copy_u8_to_f32(f32 *dest, u8 *src, i32 count) {
 
 #ifdef __AVX__
     ASSERT(((intptr_t)src  % (128/8)) == 0);
@@ -153,7 +194,7 @@ void convert_copy_u8_to_f32(f32 *dest, u8 *src, i32 count) {
 }
 
 
-b32 has_greater(u8 val, u8 *buf, i32 len)  {
+internal b32 has_greater(u8 val, u8 *buf, i32 len)  {
 #ifdef __AVX2__
     __m128i uchars;
     __m256i shorts, cmp_res;
@@ -181,7 +222,7 @@ b32 has_greater(u8 val, u8 *buf, i32 len)  {
 }
 
 
-b32 has_lower(u8 val, u8 *buf, i32 len)  {
+internal b32 has_lower(u8 val, u8 *buf, i32 len)  {
 #ifdef __AVX2__
     __m128i uchars;
     __m256i shorts, cmp_res;
@@ -270,27 +311,6 @@ void close_handle(libusb_device_handle *dev_handle, int *open_devs, pthread_t *e
 
     *open_devs -= 1;
 }
-
-
-typedef struct {
-    u64 transferred;
-    u64 processed;
-
-    u16 *active_ch;
-    u16 *active_ch_rec;
-
-    u32 len;
-    f32 *data;
-
-    f32 *record_buf;
-    u32 record_len;
-    u32 recorded;
-
-    b32 start_triggered_recording;
-    f32 trig_val_relative;
-    u8 trig_val;
-    u8 trig_channel;
-} transfer_args_t;
 
 
 static void cb_buf_iso(struct libusb_transfer *transfer) {
@@ -425,8 +445,120 @@ static void usb_cb_free(struct libusb_transfer *transfer) {
     libusb_free_transfer(transfer);
 }
 
+static int usb_init(usb_stuf_t *usb_stuf, transfer_args_t *transfer_args)
+{
+    usb_stuf->args = transfer_args;
 
-static void send_signal_restart(libusb_device_handle *dev, u16 active_channels) {
+    int retval = libusb_init_context(NULL, NULL, 0);
+    if (retval < 0) {
+        fprintf(stderr, "failed to initializa libusb %d - %s\n", retval, libusb_strerror(retval));
+        exit(1);
+    }
+
+    usb_stuf->dev = NULL;
+    usb_stuf->dev = get_dev();
+    printf("Device %p\n", usb_stuf->dev);
+    if(usb_stuf->dev == NULL) {
+        fprintf(stderr, "Error! Could not find USB device!\n");
+        libusb_exit(NULL);
+        return -1;
+    }
+
+    usb_stuf->ctrl_transfer = NULL;
+    usb_stuf->ctrl_transfer = libusb_alloc_transfer(0);
+    if(usb_stuf->ctrl_transfer == NULL) {
+        fprintf(stderr, "Error! Could not allocate the transfer!\n");
+        libusb_close(usb_stuf->dev);
+        libusb_exit(NULL);
+        return -1;
+    }
+
+    libusb_fill_control_setup((unsigned char *)usb_stuf->ctrl_buf, 0x40, 3, 1, 0, 0);
+    libusb_fill_control_transfer(usb_stuf->ctrl_transfer, usb_stuf->dev, (unsigned char *)usb_stuf->ctrl_buf, ctrl_cb_buf, NULL, 1000);
+
+
+    usb_stuf->ctrl_transfer_signal = NULL;
+    usb_stuf->ctrl_transfer_signal = libusb_alloc_transfer(0);
+    if(usb_stuf->ctrl_transfer_signal == NULL) {
+        fprintf(stderr, "Error! Could not allocate the transfer!\n");
+        libusb_close(usb_stuf->dev);
+        libusb_exit(NULL);
+        return -1;
+    }
+
+    u8 *signal_data = &usb_stuf->ctrl_buf_signal[8];
+#define SIG_LEN 0x40
+    for (i32 i = 0; i < SIG_LEN/4; i++) {
+        ((i32 *)signal_data)[i] = i*4;
+    }
+    libusb_fill_control_setup((unsigned char *)usb_stuf->ctrl_buf_signal, 0x40, 5, 3, SIG_LEN, SIG_LEN);
+    libusb_fill_control_transfer(usb_stuf->ctrl_transfer_signal, usb_stuf->dev, (unsigned char *)usb_stuf->ctrl_buf_signal, ctrl_cb_buf, NULL, 1000);
+
+    u8 *signal_data_2 = &usb_stuf->ctrl_buf_signal_2[8];
+    for (i32 i = 0; i < SIG_LEN/4; i++) {
+        ((i32 *)signal_data_2)[i] = i;
+    }
+    libusb_fill_control_setup((unsigned char *)usb_stuf->ctrl_buf_signal_2, 0x40, 5, 3,  SIG_LEN, SIG_LEN);
+
+
+    for (int i = 0; i < NUM_USB_TRANSFERS; i++) {
+        usb_stuf->USB_transfers[i]= libusb_alloc_transfer(NUM_USB_ISO_PACKETS);
+        if(usb_stuf->USB_transfers[i] == NULL) {
+            fprintf(stderr, "Error! Could not allocate the transfer!\n");
+            libusb_close(usb_stuf->dev);
+            libusb_exit(NULL);
+            return -1;
+        }
+    }
+
+    if (libusb_submit_transfer(usb_stuf->ctrl_transfer) != 0) {
+        fprintf(stderr, "Error! Could not submit the ctrl_transfer!\n");
+        // libusb_free_transfer(usb_stuf->ctrl_transfer);
+        libusb_close(usb_stuf->dev);
+        libusb_exit(NULL);
+        return -1;
+    }
+    libusb_handle_events(0);
+
+
+    for (int i = 0; i < NUM_USB_TRANSFERS; i++) {
+        libusb_fill_iso_transfer(usb_stuf->USB_transfers[i], usb_stuf->dev, 0x84, usb_stuf->iso_buf[i], sizeof(usb_stuf->iso_buf[i]),
+                                 NUM_USB_ISO_PACKETS, cb_buf_iso, transfer_args, 1000);
+        libusb_set_iso_packet_lengths(usb_stuf->USB_transfers[i], USB_ISO_PACKET_SIZE);
+
+        if (libusb_submit_transfer(usb_stuf->USB_transfers[i]) != 0) {
+            fprintf(stderr, "Error! Could not submit the transfer!\n");
+            libusb_free_transfer(usb_stuf->USB_transfers[i]);
+            libusb_close(usb_stuf->dev);
+            libusb_exit(NULL);
+            return -1;
+        }
+        else {
+        }
+    }
+
+    if (pthread_create(&usb_stuf->th_USB, NULL, event_thread_func, NULL) != 0) {
+        perror("Thread creation failed");
+    }
+
+    return 0;
+}
+
+static void usb_close(usb_stuf_t *usb_stuf) {
+    usb_should_run = 0;
+    libusb_close(usb_stuf->dev);
+    if (pthread_join(usb_stuf->th_USB, NULL) != 0) {
+        perror("USB thread joining failed");
+    }
+
+    for (int i = 0; i < NUM_USB_TRANSFERS; i++) {
+        libusb_free_transfer(usb_stuf->USB_transfers[i]);
+    }
+    libusb_exit(NULL);
+}
+
+
+static void send_signal_restart(usb_stuf_t *usb_stuf, u16 active_channels) {
     block_t *transfer_buf_block = push_block(&g_block_queue, 16, 2);
     if (transfer_buf_block == NULL) {
         fprintf(stderr, "Error: Malloc failed to allocate buffer for sending\n");
@@ -440,7 +572,7 @@ static void send_signal_restart(libusb_device_handle *dev, u16 active_channels) 
     }
 
     libusb_fill_control_setup(transfer_buf, 0x40, 3, active_channels, 0, 0);
-    libusb_fill_control_transfer(transfer_reset, dev, transfer_buf, usb_cb_free, transfer_buf_block, 1000);
+    libusb_fill_control_transfer(transfer_reset, usb_stuf->dev, transfer_buf, usb_cb_free, transfer_buf_block, 1000);
 
     if (libusb_submit_transfer(transfer_reset) != 0) {
         perror("Error! Could not submit the RESTART ctrl_transfer!\n");
@@ -450,7 +582,7 @@ static void send_signal_restart(libusb_device_handle *dev, u16 active_channels) 
 }
 
 
-static void send_signal_buf(void *sig_buf, u16 len, libusb_device_handle *dev, b32 switch_buffers) {
+static void send_signal_buf(usb_stuf_t *usb_stuf, void *sig_buf, u16 len, b32 switch_buffers) {
     const u32 pkt_size = 8 + 0x40;
     const u32 pkt_buf_len = 0x40;
 
@@ -482,7 +614,7 @@ static void send_signal_buf(void *sig_buf, u16 len, libusb_device_handle *dev, b
             buf_data[j] = ((u8 *)sig_buf)[pkt_buf_len*i + j];
         }
         libusb_fill_control_setup((unsigned char *)buf, 0x40, 5, wValue, wIndex, length);
-        libusb_fill_control_transfer(transfer, dev, (unsigned char *)buf, usb_cb_free,
+        libusb_fill_control_transfer(transfer, usb_stuf->dev, (unsigned char *)buf, usb_cb_free,
                                      (i == (num_pkt-1)) ? transfer_buf_block : NULL, 1000);
 
         if (libusb_submit_transfer(transfer) != 0) {
@@ -491,5 +623,14 @@ static void send_signal_buf(void *sig_buf, u16 len, libusb_device_handle *dev, b
             libusb_free_transfer(transfer);
             break;
         }
+    }
+    send_signal_restart(usb_stuf, *usb_stuf->args->active_ch);
+}
+
+
+static void start_active_channels(usb_stuf_t *usb_stuf, u16 active_channels) {
+    libusb_fill_control_setup((unsigned char *)usb_stuf->ctrl_buf, 0x40, 3, active_channels, 0, 0);
+    if (libusb_submit_transfer(usb_stuf->ctrl_transfer) != 0) {
+        fprintf(stderr, "Error! Could not submit the RESTART ctrl_transfer!\n");
     }
 }
