@@ -134,6 +134,15 @@ typedef struct {
 } ring_buffer_t;
 
 
+inline void *rbuf_get_head(ring_buffer_t *rbuf) {
+    return (void *)((uintptr_t)rbuf->buf + rbuf->write_pos);
+}
+
+
+inline void *rbuf_get_tail(ring_buffer_t *rbuf) {
+    return (void *)((uintptr_t)rbuf->buf + rbuf->read_pos);
+}
+
 
 internal ring_buffer_t get_ring_buffer(u64 size) {
     ring_buffer_t rbuf = {};
@@ -247,11 +256,21 @@ internal i64 rbuf_release_from_end(ring_buffer_t *rbuf, u64 size) {
 
 
 internal void *rbuf_pop(ring_buffer_t *rbuf, u64 size) {
-    size = MIN(size, rbuf->write_pos - rbuf->read_pos);
+    if (size > rbuf->write_pos - rbuf->read_pos) {
+        return NULL;
+    }
+    void *res = (void *)((uintptr_t)rbuf->buf + rbuf->read_pos);
     rbuf->read_pos += size;
     if (rbuf->read_pos >= rbuf->size) {
         rbuf->write_pos -= rbuf->size;
         rbuf->read_pos  -= rbuf->size;
+    }
+    return res;
+}
+
+internal void *rbuf_peak_read(ring_buffer_t *rbuf, u64 size) {
+    if (size > rbuf->write_pos - rbuf->read_pos) {
+        return NULL;
     }
     return (void *)((uintptr_t)rbuf->buf + rbuf->read_pos);
 }

@@ -62,7 +62,6 @@ typedef struct {
 
 
 typedef struct {
-    i32 id;
     i32 size;
     void *data;
 } block_t;
@@ -70,9 +69,6 @@ typedef struct {
 
 typedef struct {
     ring_buffer_t rbuf;
-    i32 id_head_next;
-    i32 id_tail;
-    i32 num_blocks;
 } block_queue_t;
 
 
@@ -87,12 +83,9 @@ internal block_t *push_block(block_queue_t *queue, u64 size, u32 align) {
     void *block_data = align_pow2((void *)((uintptr_t)buf + sizeof(block_t)), align);
 
     *block = (block_t){
-        .id = queue->id_head_next,
         .size = sizeof(block_t) + size + align,
         .data = block_data
     };
-    queue->id_head_next++;
-    queue->num_blocks++;
 
     return block;
 }
@@ -110,16 +103,10 @@ internal u64 write_block(block_queue_t *queue, u64 size, void *data, u32 align) 
 
 internal void queue_free_block(block_queue_t *queue, block_t *block) {
     block->data = NULL;
-    if (block->id == queue->id_tail) {
-        queue->num_blocks--;
-
-        block_t *next_tail = rbuf_pop(&queue->rbuf, block->size);
-        while ((next_tail->data != NULL) && (queue->num_blocks > 0)) {
-            queue->num_blocks--;
-            next_tail = rbuf_pop(&queue->rbuf, next_tail->size);
-        }
-
-        queue->id_tail = (queue->num_blocks != 0) ? next_tail->id : queue->id_head_next;
+    block_t *next_tail = rbuf_get_tail(&queue->rbuf);
+    next_tail = rbuf_peak_read(&queue->rbuf, next_tail->size);
+    while ((next_tail->data != NULL) && (next_tail != NULL)) {
+        next_tail = rbuf_pop(&queue->rbuf, next_tail->size);
     }
 }
 
@@ -131,9 +118,6 @@ __attribute__((constructor(202)))
 void setup_queue(void) {
     g_block_queue = (block_queue_t){
     .rbuf = get_ring_buffer(DEFAULT_BLOCK_QUEUE_SIZE),
-    .id_head_next = 0,
-    .id_tail = 0,
-    .num_blocks = 0,
     };
 }
 
