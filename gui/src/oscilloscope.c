@@ -14,7 +14,13 @@
 #include "my_types.h"
 #include "my_ui.h"
 // #include "arena.c"
+#ifdef USB_LIBUSB
 #include "usb.c"
+#else
+#ifdef USB_MODULE
+#include "usb_mod.c"
+#endif
+#endif
 
 #include "shaders.h"
 

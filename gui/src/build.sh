@@ -44,4 +44,5 @@ LFLAGS=" -lm -lusb-1.0 -L$RAYLIB_LIB_DIR -lraylib "
 
 mkdir -p ../build
 
-gcc $CFLAGS -I$RAYLIB_INCLUDE_DIR -o ../build/oscilloscope ../src/oscilloscope.c  $LFLAGS
+gcc -DUSB_LIBUSB $CFLAGS -I$RAYLIB_INCLUDE_DIR -o ../build/oscilloscope_libusb ../src/oscilloscope.c  $LFLAGS
+gcc -DUSB_MODULE $CFLAGS -I$RAYLIB_INCLUDE_DIR -o ../build/oscilloscope_mod    ../src/oscilloscope.c  $LFLAGS
