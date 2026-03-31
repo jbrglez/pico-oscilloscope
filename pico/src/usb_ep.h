@@ -45,42 +45,13 @@ static const usb_interface_descriptor interface_descriptor = {
         .bDescriptorType    = DESCRIPTOR_INTERFACE,
         .bInterfaceNumber   = 0,
         .bAlternateSetting  = 0,
-        .bNumEndpoints      = 4,
+        .bNumEndpoints      = 1,
         .bInterfaceClass    = 0xff, // Vendor specific endpoint
         .bInterfaceSubClass = 0,
         .bInterfaceProtocol = 0,
         .iInterface         = 0
 };
 
-
-static const usb_endpoint_descriptor ep1_out = {
-        .bLength          = sizeof(usb_endpoint_descriptor),
-        .bDescriptorType  = DESCRIPTOR_ENDPOINT,
-        .bEndpointAddress = 0x01,
-        // .bmAttributes     = USB_TRANSFER_INTERRUPT,
-        .bmAttributes     = USB_TRANSFER_BULK,
-        .wMaxPacketSize   = 64,
-        .bInterval        = 0
-};
-
-static const usb_endpoint_descriptor ep2_in = {
-        .bLength          = sizeof(usb_endpoint_descriptor),
-        .bDescriptorType  = DESCRIPTOR_ENDPOINT,
-        .bEndpointAddress = 0x82,
-        // .bmAttributes     = USB_TRANSFER_ISO,
-        .bmAttributes     = USB_TRANSFER_BULK,
-        .wMaxPacketSize   = 512,
-        .bInterval        = 0
-};
-
-static const usb_endpoint_descriptor ep3_in = {
-        .bLength          = sizeof(usb_endpoint_descriptor),
-        .bDescriptorType  = DESCRIPTOR_ENDPOINT,
-        .bEndpointAddress = 0x83,
-        .bmAttributes     = USB_TRANSFER_BULK,
-        .wMaxPacketSize   = 64,
-        .bInterval        = 0
-};
 
 static const usb_endpoint_descriptor ep4_in = {
         .bLength          = sizeof(usb_endpoint_descriptor),
@@ -97,9 +68,6 @@ static const usb_configuration_descriptor config_descriptor = {
         .bDescriptorType = DESCRIPTOR_CONFIGURATION,
         .wTotalLength    = (sizeof(config_descriptor) +
                             sizeof(interface_descriptor) +
-                            sizeof(ep1_out) +
-                            sizeof(ep2_in) +
-                            sizeof(ep3_in) +
                             sizeof(ep4_in)),
         .bNumInterfaces  = 1,
         .bConfigurationValue = 1,
@@ -124,26 +92,6 @@ static endp_t endp0_out = {
         .data_buffer = &(usb_dpram->ep0_buf_a[0])
 };
 
-static endp_t endp1_out = {
-        .id = 1, .dir = 0, .next_data_pid = 0,
-        .descriptor = &ep1_out,
-        .buf_ctrl = &(usb_dpram->ep_buf_ctrl[1].out),
-        .data_buffer = &(usb_dpram->epx_data[0x0])
-};
-
-static endp_t endp2_in  = {
-        .id = 2, .dir = 1, .next_data_pid = 0,
-        .descriptor = &ep2_in,
-        .buf_ctrl = &(usb_dpram->ep_buf_ctrl[2].in),
-        .data_buffer = (volatile u8 *)((uintptr_t)usb_dpram + 0x200)
-};
-
-static endp_t endp3_in  = {
-        .id = 3, .dir = 1, .next_data_pid = 0,
-        .descriptor = &ep3_in,
-        .buf_ctrl = &(usb_dpram->ep_buf_ctrl[3].in),
-        .data_buffer = (volatile u8 *)((uintptr_t)usb_dpram + 0x400)
-};
 
 static endp_t endp4_in  = {
         .id = 4, .dir = 1, .next_data_pid = 0,

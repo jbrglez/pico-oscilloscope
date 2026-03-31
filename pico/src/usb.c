@@ -49,12 +49,6 @@ internal endp_t *get_ep_by_addr(u32 addr) {
             return &endp0_in;
         case 0x00:
             return &endp0_out;
-        case 0x01:
-            return &endp1_out;
-        case 0x82:
-            return &endp2_in;
-        case 0x83:
-            return &endp3_in;
         case 0x84:
             return &endp4_in;
         default:
@@ -113,18 +107,6 @@ internal void init_usb(void) {
     usb_hw->inte = USB_INTS_EP_STALL_NAK | USB_INTS_SETUP_REQ |
                    USB_INTS_BUS_RESET | USB_INTS_BUFF_STATUS;
 
-    usb_dpram->ep_ctrl[0].out = USB_EP_CTRL_ENABLE |
-                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
-                                (endp1_out.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
-                                DPRAM_OFFSET(endp1_out.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
-    usb_dpram->ep_ctrl[1].in =  USB_EP_CTRL_ENABLE |
-                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
-                                ( endp2_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
-                                DPRAM_OFFSET(endp2_in.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
-    usb_dpram->ep_ctrl[2].in =  USB_EP_CTRL_ENABLE |
-                                USB_EP_CTRL_INTERRUPT_PER_BUFFER |
-                                ( endp3_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
-                                DPRAM_OFFSET(endp3_in.data_buffer) << USB_EP_CTRL_ADDR_BASE_OFFSET_LSB;
     usb_dpram->ep_ctrl[3].in =  USB_EP_CTRL_ENABLE |
                                 USB_EP_CTRL_INTERRUPT_PER_BUFFER |
                                 ( endp4_in.descriptor->bmAttributes << USB_EP_CTRL_EP_TYPE_LSB) |
@@ -174,12 +156,6 @@ internal void usb_handle_get_descriptor(void) {
             buf += sizeof(usb_configuration_descriptor);
             copy_buf((u8 *)&interface_descriptor, buf, sizeof(usb_interface_descriptor));
             buf += sizeof(usb_interface_descriptor);
-            copy_buf((u8 *)&ep1_out, buf, sizeof(interface_descriptor));
-            buf += sizeof(usb_endpoint_descriptor);
-            copy_buf((u8 *)&ep2_in, buf, sizeof(interface_descriptor));
-            buf += sizeof(usb_endpoint_descriptor);
-            copy_buf((u8 *)&ep3_in, buf, sizeof(interface_descriptor));
-            buf += sizeof(usb_endpoint_descriptor);
             copy_buf((u8 *)&ep4_in, buf, sizeof(interface_descriptor));
             buf += sizeof(usb_endpoint_descriptor);
 
@@ -567,43 +543,6 @@ internal void usb_handle_buff_status() {
                 else {
                     ep_transfer(&endp0_out, 0x40);
                 }
-            }
-
-            else if (i == 3) {   // EP1 OUT
-                pico_rw_t *rec = (pico_rw_t *)endp1_out.data_buffer;
-                u32 *send_data = (u32 *)endp3_in.data_buffer;
-
-                if (rec->action == PICO_RW_WRITE_ONE) {
-                    *(u32 *)(rec->write_addr) = rec->write_value;
-                }
-                else if (rec->action == PICO_RW_WRITE_MULTIPLE) {
-                    for (i32 i = 0; i < rec->num_writes; i++) {
-                        ((u32 *)(rec->write_addr_start))[i] = rec->write_values[i];
-                    }
-                }
-                else if (rec->action == PICO_RW_READ_ONE) {
-                    *send_data = *(u32 *)(rec->read_addr);
-                    ep_transfer(&endp3_in, 4);
-                }
-                else if (rec->action == PICO_RW_READ_MULTIPLE) {
-                    for (i32 i = 0; i < rec->num_reads; i++) {
-                        send_data[i] = ((u32 *)(rec->read_addr_start))[i];
-                    }
-                    ep_transfer(&endp3_in, 4*rec->num_reads);
-                }
-
-                ep_transfer(&endp1_out, 64);
-                endp1_out.next_data_pid ^= 1;
-            }
-
-            else if (i == 4) {   // EP2 IN
-                ep_transfer(&endp2_in, 64);
-                endp2_in.next_data_pid ^= 1;
-            }
-
-            else if (i == 6) {   // EP3 IN
-                ep_transfer(&endp3_in, 64);
-                endp3_in.next_data_pid ^= 1;
             }
 
             else if (i == 8) {   // EP4 IN

@@ -106,11 +106,6 @@ int main() {
 
     u32 i = 0;
     while (!(usb_state.state == USB_STATE_CONFIGURED));
-    ep_transfer(&endp1_out, 64);
-    ep_transfer(&endp2_in, 64);
-    endp2_in.next_data_pid ^= 1;
-    ep_transfer(&endp3_in, 64);
-    endp3_in.next_data_pid ^= 1;
     ep_transfer(&endp4_in, 0);
 
     pin_to_1(LED_2_PIN);
