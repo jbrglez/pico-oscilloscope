@@ -1,12 +1,12 @@
-/*#include <linux/kernel.h>*/
-/*#include <linux/errno.h>*/
-/*#include <linux/slab.h>*/
+// #include <linux/kernel.h>
+// #include <linux/errno.h>
+// #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/init.h>
-/*#include <linux/kref.h>*/
-/*#include <linux/uaccess.h>*/
+// #include <linux/kref.h>
+// #include <linux/uaccess.h>
 #include <linux/usb.h>
-/*#include <linux/mutex.h>*/
+// #include <linux/mutex.h>
 
 
 #include "pico_osci_ioctl.h"
@@ -25,7 +25,7 @@
 
 static const struct usb_device_id pico_osci_table[] = {
 	{ USB_DEVICE(USB_PICO_OSCI_VENDOR_ID, USB_PICO_OSCI_PRODUCT_ID) },
-	{ }					/* Terminating entry */
+	{ }
 };
 MODULE_DEVICE_TABLE(usb, pico_osci_table);
 
@@ -33,15 +33,7 @@ MODULE_DEVICE_TABLE(usb, pico_osci_table);
 /* Get a minor range for your devices from the usb maintainer */
 #define USB_PICO_OSCI_MINOR_BASE	192
 
-/* our private defines. if this grows any larger, use your own .h file */
-#define MAX_TRANSFER		(PAGE_SIZE - 512)
-/*
- * MAX_TRANSFER is chosen so that the VM is not stressed by
- * allocations > PAGE_SIZE and the number of packets in a page
- * is an integer 512 is the largest possible packet on EHCI
- */
 #define WRITES_IN_FLIGHT	8
-/* arbitrarily chosen */
 
 /* Structure to hold all of our device specific stuff */
 struct usb_pico_osci {
@@ -50,24 +42,19 @@ struct usb_pico_osci {
 
 	struct usb_device	*udev;			/* the usb device for this device */
 	struct usb_interface	*interface;		/* the interface for this device */
-	struct semaphore	limit_sem;		/* limiting the number of writes in progress */
+	// struct semaphore	limit_sem;		/* limiting the number of writes in progress */
 	struct usb_anchor	submitted;		/* in case we need to retract our submissions */
 
 	struct urb		*iso_in_urb[2];		/* the urb to read data with */
 	unsigned char           *iso_in_buffer[2];	/* the buffer to receive data */
 	size_t			iso_in_size;		/* the size of the receive buffer */
-	size_t			iso_in_filled;		/* number of bytes in the buffer */
-	size_t			iso_in_copied;		/* already copied to user space */
 	__u8			iso_in_endpointAddr;	/* the address of the bulk in endpoint */
 
 	unsigned char           *sample_buffer;	/* the buffer to receive data */
-	unsigned char           *sample_buffer_end;	/* the buffer to receive data */
 	size_t			buf_size;
-	unsigned char           *buf_put;	/* the pointer to buffer to put data*/
-	unsigned char           *buf_get;	/* the pointer to buffer to get data*/
 	int			buf_len;
-	int           		buf_put_idx;	/* the pointer to buffer to put data*/
-	int           		buf_get_idx;	/* the pointer to buffer to get data*/
+	int           		buf_put_idx;	/* where to put data into sample_buffer */
+	int           		buf_get_idx;	/* where to get data from sample_buffer */
 	bool 			capturing;
 
 	int			errors;			/* the last request tanked */
@@ -76,7 +63,7 @@ struct usb_pico_osci {
 	struct kref		kref;
 	struct mutex		io_mutex;		/* synchronize I/O with disconnect */
 	unsigned long		disconnected:1;
-	wait_queue_head_t	bulk_in_wait;		/* to wait for an ongoing read */
+	wait_queue_head_t	iso_in_wait;		/* to wait for an ongoing read */
 };
 #define to_pico_osci_dev(d) container_of(d, struct usb_pico_osci, kref)
 
@@ -93,6 +80,7 @@ typedef enum {
 
 
 static struct usb_driver pico_osci_driver;
+
 
 static void pico_osci_delete(struct kref *kref)
 {
@@ -118,13 +106,11 @@ static int pico_submit_urb(struct usb_pico_osci *dev, struct urb *urb)
 	int retry_count = 0;
 
 retry_submission:
-	/*retval = usb_submit_urb(dev->iso_in_urb[0], GFP_ATOMIC);*/
+	// retval = usb_submit_urb(urb, GFP_ATOMIC);
 	retval = usb_submit_urb(urb, GFP_KERNEL);
 	retry_count++;
-	if ((retval == -EAGAIN) && (retry_count < 4)) {
-		pr_info("pico_osci URB SUBMISSION: retry number %d\n", retry_count);
+	if ((retval == -EAGAIN) && (retry_count < 4))
 		goto retry_submission;
-	}
 
 	if (retval)
 		dev_err(&dev->interface->dev, "Unable to submit URB. (errno: %d)\n", retval);
@@ -135,6 +121,7 @@ retry_submission:
 
 static int pico_osci_open(struct inode *inode, struct file *file)
 {
+	pr_info("pico CALL: pico_osci_open\n");
 	struct usb_pico_osci *dev;
 	struct usb_interface *interface;
 	int subminor;
@@ -176,6 +163,7 @@ exit:
 
 static int pico_osci_release(struct inode *inode, struct file *file)
 {
+	pr_info("pico CALL: pico_osci_release\n");
 	struct usb_pico_osci *dev;
 
 	dev = file->private_data;
@@ -194,7 +182,8 @@ static int pico_osci_release(struct inode *inode, struct file *file)
 
 static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
 {
-	pr_info("pico_osci: IOCTL - cmd = %u\n", cmd);
+	// pr_info("pico_osci: IOCTL - cmd = %u\n", cmd);
+	pr_info("pico CALL: pico_osci_ioctl\n");
 
 	static uint8_t status = 0x12;
 	uint16_t chans = (uint16_t)arg;
@@ -209,16 +198,17 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 
 	switch (cmd) {
 		case PICO_IOCTL_START_RUNNING:
+			pr_debug("pico_osci: IOCTL - START_RUNNING ( chans = %d )\n", chans);
 			if (dev->capturing != 1) {
 				dev->capturing = 1;
 				retval = pico_submit_urb(dev, dev->iso_in_urb[0]);
 				if (retval) {
-					pr_err("pico_osci: IOCTL - Error setting pico capture chans. Failed to submit URB. (errno %d)\n", retval);
+					pr_err("pico_osci: IOCTL - Error setting pico capture chans. Failed to submit URB_0. (errno %d)\n", retval);
 					return -1;
 				}
 				retval = pico_submit_urb(dev, dev->iso_in_urb[1]);
 				if (retval) {
-					pr_err("pico_osci: IOCTL - Error setting pico capture chans. Failed to submit URB. (errno %d)\n", retval);
+					pr_err("pico_osci: IOCTL - Error setting pico capture chans. Failed to submit URB_1. (errno %d)\n", retval);
 					return -1;
 				}
 			}
@@ -233,10 +223,10 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 			dev->buf_put_idx = 0;
 			dev->buf_get_idx = 0;
 
-			pr_info("pico_osci: IOCTL - Updated the chans to %d\n", chans);
 			break;
 
 		case PICO_IOCTL_STOP_RUNNING:
+			pr_debug("pico_osci: IOCTL - STOP_RUNNING\n");
 			retval = usb_control_msg_send(dev->udev, 0, PICO_STOP_RUNNING_CAPTURE, 0x40, 0, 0, NULL, 0, 100, GFP_KERNEL);
 			if (retval < 0) {
 				pr_err("pico_osci: IOCTL - Error stopping pico capture. (errno %d)\n", retval);
@@ -244,10 +234,14 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 			}
 
 			dev->capturing = 0;
+			usb_kill_urb(dev->iso_in_urb[0]);
+			usb_kill_urb(dev->iso_in_urb[1]);
+			// usb_kill_anchored_urbs(&dev->submitted);
 			pr_info("pico_osci: IOCTL - Stopped capturing\n");
 			break;
 
 		case PICO_IOCTL_SET_NEW_SIGNAL:
+			pr_info("pico_osci: IOCTL - NEW_SIGNAL\n");
 			if (copy_from_user(&waveform, (struct buffer *)arg, sizeof(waveform))) {
 				pr_err("pico_osci: IOCTL - Error copying data from user.\n");
 				return -EFAULT;
@@ -293,6 +287,7 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 			break;
 
 		case PICO_IOCTL_SET_STATUS:
+			pr_debug("pico_osci: IOCTL - SET_STATUS\n");
 			if (copy_from_user(&status, (uint16_t *)arg, sizeof(status))) {
 				pr_err("pico_osci: IOCTL - Error copying data from user.\n");
 				return -EFAULT;
@@ -309,6 +304,7 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 			break;
 
 		case PICO_IOCTL_GET_STATUS:
+			pr_debug("pico_osci: IOCTL - GET_STATUS\n");
 			retval = usb_control_msg_recv(dev->udev, 0, PICO_GET_OSCI_STATUS, 0xC0, 0, 0, &status, 1, 100, GFP_KERNEL);
 			if (retval < 0) {
 				pr_err("pico_osci: IOCTL - Error reading pico status. (errno %d)\n", retval);
@@ -332,6 +328,7 @@ static long int pico_osci_ioctl (struct file *file, unsigned int cmd, unsigned l
 	return 0;
 }
 
+
 static void pico_osci_read_iso_callback(struct urb *urb)
 {
 	struct usb_pico_osci *dev;
@@ -341,36 +338,21 @@ static void pico_osci_read_iso_callback(struct urb *urb)
 	dev = urb->context;
 
 	// spin_lock_irqsave(&dev->err_lock, flags);
-	/* sync/async unlink faults aren't errors */
-	if (urb->status) {
-		// pr_info("pico_osci CALLBACK called - STATUS %d\n", urb->status);
-		if (!(urb->status == -ENOENT ||
-		    urb->status == -ECONNRESET ||
-		    urb->status == -ESHUTDOWN))
-			dev_err(&dev->interface->dev,
-				"%s - nonzero write iso status received: %d\n",
-				__func__, urb->status);
-
+	// sync/async unlink faults aren't errors
+	if (urb->status && !((urb->status == -ENOENT) || (urb->status == -ECONNRESET))) {
+		dev_err(&dev->interface->dev,
+			"%s - nonzero write iso status received: %d\n",
+			__func__, urb->status);
 		dev->errors = urb->status;
 	} else {
-		// dev->iso_in_filled = urb->actual_length;
-
-		// pr_info("pico_osci CALLBACK: recieved %d bytes\n", urb->actual_length);
-		// if (urb->actual_length != 0)
-		// 	pr_info("pico_osci CALLBACK: recieved %d bytes\n",
-		// 		urb->actual_length);
-
 		for (int i = 0; i < NUM_ISOC_PACKETS; i++) {
-
 			if (urb->iso_frame_desc[i].actual_length != 0) {
-
 				int new_buf_put_idx = dev->buf_put_idx + urb->iso_frame_desc[i].actual_length;
 
-				/*int start = dev->buf_put_idx;*/
+				// int start = dev->buf_put_idx;
 
 				unsigned char *dest = &dev->sample_buffer[dev->buf_put_idx];
 				unsigned char *src  = &((unsigned char *)urb->transfer_buffer)[urb->iso_frame_desc[i].offset];
-				/*pr_info("dest: %p, src: %p, offset %u\n", dest, src, urb->iso_frame_desc[i].offset);*/
 
 				if (new_buf_put_idx <= dev->buf_len) {
 					memcpy(dest, src, urb->iso_frame_desc[i].actual_length);
@@ -399,18 +381,11 @@ static void pico_osci_read_iso_callback(struct urb *urb)
 				// We push forward the buf_get_idx if there is too much unread data in the buffer.
 				if (available > max_available) {
 					int new_idxg = idxg + available - max_available;
-					if ( new_idxg > len) {
+					if ( new_idxg > len)
 						new_idxg -=len;
-					}
 					dev->buf_get_idx = new_idxg;
 				}
-				
 			}
-
-			// if ((urb->iso_frame_desc[i].actual_length != 0) || (urb->iso_frame_desc[i].status != 0)) {
-			// 	pr_info("pico_osci CALLBACK: pkt %d :: recieved %d bytes :: status %d\n",
-			// 		i, urb->iso_frame_desc[i].actual_length, urb->iso_frame_desc[i].status);
-			// }
 		}
 	}
 	// dev->ongoing_read = 0;
@@ -418,10 +393,7 @@ static void pico_osci_read_iso_callback(struct urb *urb)
 
 	// wake_up_interruptible(&dev->iso_in_wait);
 
-	// retval = usb_submit_urb(dev->iso_in_urb[0], GFP_KERNEL);
-
-	/*if (urb->status != -ESHUTDOWN) {*/
-	if ((urb->status != -ESHUTDOWN) && dev->capturing) {
+	if ((urb->status == 0) && dev->capturing) {
 		retval = usb_submit_urb(urb, GFP_ATOMIC);
 		if (retval < 0) {
 			dev_err(&dev->interface->dev,
@@ -431,114 +403,6 @@ static void pico_osci_read_iso_callback(struct urb *urb)
 	}
 }
 
-
-// static ssize_t pico_osci_read(struct file *file, char *buffer, size_t count,
-// 			 loff_t *ppos)
-// {
-// 	struct usb_pico_osci *dev;
-// 	int rv;
-// 	bool ongoing_io;
-// 
-// 	dev = file->private_data;
-// 
-// 	if (!count)
-// 		return 0;
-// 
-// 	/* no concurrent readers */
-// 	rv = mutex_lock_interruptible(&dev->io_mutex);
-// 	if (rv < 0)
-// 		return rv;
-// 
-// 	if (dev->disconnected) {		/* disconnect() was called */
-// 		rv = -ENODEV;
-// 		goto exit;
-// 	}
-// 
-// 	/* if IO is under way, we must not touch things */
-// retry:
-// 	spin_lock_irq(&dev->err_lock);
-// 	ongoing_io = dev->ongoing_read;
-// 	spin_unlock_irq(&dev->err_lock);
-// 
-// 	if (ongoing_io) {
-// 		/* nonblocking IO shall not wait */
-// 		if (file->f_flags & O_NONBLOCK) {
-// 			rv = -EAGAIN;
-// 			goto exit;
-// 		}
-// 		/*
-// 		 * IO may take forever
-// 		 * hence wait in an interruptible state
-// 		 */
-// 		rv = wait_event_interruptible(dev->bulk_in_wait, (!dev->ongoing_read));
-// 		if (rv < 0)
-// 			goto exit;
-// 	}
-// 
-// 	/* errors must be reported */
-// 	rv = dev->errors;
-// 	if (rv < 0) {
-// 		/* any error is reported once */
-// 		dev->errors = 0;
-// 		/* to preserve notifications about reset */
-// 		rv = (rv == -EPIPE) ? rv : -EIO;
-// 		/* report it */
-// 		goto exit;
-// 	}
-// 
-// 	/*
-// 	 * if the buffer is filled we may satisfy the read
-// 	 * else we need to start IO
-// 	 */
-// 
-// 	if (dev->bulk_in_filled) {
-// 		/* we had read data */
-// 		size_t available = dev->bulk_in_filled - dev->bulk_in_copied;
-// 		size_t chunk = min(available, count);
-// 
-// 		if (!available) {
-// 			/*
-// 			 * all data has been used
-// 			 * actual IO needs to be done
-// 			 */
-// 			rv = pico_osci_do_read_io(dev, count);
-// 			if (rv < 0)
-// 				goto exit;
-// 			else
-// 				goto retry;
-// 		}
-// 		/*
-// 		 * data is available
-// 		 * chunk tells us how much shall be copied
-// 		 */
-// 
-// 		if (copy_to_user(buffer,
-// 				 dev->bulk_in_buffer + dev->bulk_in_copied,
-// 				 chunk))
-// 			rv = -EFAULT;
-// 		else
-// 			rv = chunk;
-// 
-// 		dev->bulk_in_copied += chunk;
-// 
-// 		/*
-// 		 * if we are asked for more than we have,
-// 		 * we start IO but don't wait
-// 		 */
-// 		if (available < count)
-// 			pico_osci_do_read_io(dev, count - chunk);
-// 	} else {
-// 		/* no data in the buffer */
-// 		rv = pico_osci_do_read_io(dev, count);
-// 		if (rv < 0)
-// 			goto exit;
-// 		else
-// 			goto retry;
-// 	}
-// exit:
-// 	mutex_unlock(&dev->io_mutex);
-// 	return rv;
-// }
 
 static ssize_t pico_osci_read(struct file *file, char *buffer, size_t count,
 			 loff_t *ppos)
@@ -565,6 +429,7 @@ static ssize_t pico_osci_read(struct file *file, char *buffer, size_t count,
 	rv = dev->errors;
 	if (rv < 0) {
 		/* any error is reported once */
+		dev_err(&dev->interface->dev, "error reading dev->error = %d\n", rv);
 		dev->errors = 0;
 		/* to preserve notifications about reset */
 		rv = (rv == -EPIPE) ? rv : -EIO;
@@ -624,6 +489,7 @@ static const struct file_operations pico_osci_fops = {
 	.llseek =	noop_llseek,
 };
 
+
 /*
  * usb class driver info in order to get a minor number from the usb core,
  * and to have the device registered with the driver core
@@ -633,6 +499,7 @@ static struct usb_class_driver pico_osci_class = {
 	.fops =		&pico_osci_fops,
 	.minor_base =	USB_PICO_OSCI_MINOR_BASE,
 };
+
 
 static int pico_osci_probe(struct usb_interface *interface,
 		      const struct usb_device_id *id)
@@ -650,11 +517,11 @@ static int pico_osci_probe(struct usb_interface *interface,
 		return -ENOMEM;
 
 	kref_init(&dev->kref);
-	sema_init(&dev->limit_sem, WRITES_IN_FLIGHT);
+	// sema_init(&dev->limit_sem, WRITES_IN_FLIGHT);
 	mutex_init(&dev->io_mutex);
 	spin_lock_init(&dev->err_lock);
-	init_usb_anchor(&dev->submitted);
-	init_waitqueue_head(&dev->bulk_in_wait);
+	// init_usb_anchor(&dev->submitted);
+	init_waitqueue_head(&dev->iso_in_wait);
 
 	dev->udev = usb_get_dev(interface_to_usbdev(interface));
 	dev->interface = usb_get_intf(interface);
@@ -692,13 +559,9 @@ static int pico_osci_probe(struct usb_interface *interface,
 		retval = -ENOMEM;
 		goto error;
 	}
-	dev->sample_buffer_end = dev->sample_buffer + dev->buf_size;
-	dev->buf_put = dev->sample_buffer;
-	dev->buf_get = dev->sample_buffer;
 	dev->buf_len = SAMPLE_BUFFER_SIZE;
 	dev->buf_put_idx = 0;
 	dev->buf_get_idx = 0;
-
 
 	dev->iso_in_urb[0] = usb_alloc_urb(NUM_ISOC_PACKETS, GFP_KERNEL);
 	if (!dev->iso_in_urb[0]) {
@@ -712,14 +575,12 @@ static int pico_osci_probe(struct usb_interface *interface,
 		goto error;
 	}
 
-
 	/* save our data pointer in this interface device */
 	usb_set_intfdata(interface, dev);
 
 	/* we can register the device now, as it is ready */
 	retval = usb_register_dev(interface, &pico_osci_class);
 	if (retval) {
-		/* something prevented us from registering this driver */
 		dev_err(&interface->dev,
 			"Not able to get a minor for this device.\n");
 		usb_set_intfdata(interface, NULL);
@@ -731,10 +592,6 @@ static int pico_osci_probe(struct usb_interface *interface,
 		 "USB Pico_osci device now attached to USBPico_osci-%d",
 		 interface->minor);
 
-	/*struct urb *urb = dev->iso_in_urb[0];*/
-	/*struct urb *urb2 = dev->iso_in_urb;*/
-
-
 	usb_fill_int_urb(dev->iso_in_urb[0],
 			dev->udev,
 			usb_rcvisocpipe(dev->udev, dev->iso_in_endpointAddr),
@@ -742,7 +599,7 @@ static int pico_osci_probe(struct usb_interface *interface,
 			dev->iso_in_size,
 			pico_osci_read_iso_callback,
 			dev,
-			1); 	// interval
+			1);
 	usb_fill_int_urb(dev->iso_in_urb[1],
 			dev->udev,
 			usb_rcvisocpipe(dev->udev, dev->iso_in_endpointAddr),
@@ -750,7 +607,7 @@ static int pico_osci_probe(struct usb_interface *interface,
 			dev->iso_in_size,
 			pico_osci_read_iso_callback,
 			dev,
-			1); 	// interval
+			1);
 
 	dev->iso_in_urb[0]->number_of_packets = NUM_ISOC_PACKETS;
 	dev->iso_in_urb[1]->number_of_packets = NUM_ISOC_PACKETS;
@@ -762,14 +619,8 @@ static int pico_osci_probe(struct usb_interface *interface,
 	}
 	dev->iso_in_urb[0]->transfer_flags = URB_ISO_ASAP;
 	dev->iso_in_urb[1]->transfer_flags = URB_ISO_ASAP;
-
-	/*retval = pico_submit_urb(dev, dev->iso_in_urb[0]);*/
-	/*if (retval)*/
-	/*	goto error;*/
-	/*retval = pico_submit_urb(dev, dev->iso_in_urb[1]);*/
-	/*if (retval)*/
-	/*	goto error;*/
-
+	// usb_anchor_urb(dev->iso_in_urb[0], &dev->submitted);
+	// usb_anchor_urb(dev->iso_in_urb[1], &dev->submitted);
 
 	return 0;
 
@@ -777,8 +628,11 @@ error:
 	/* this frees allocated memory */
 	kref_put(&dev->kref, pico_osci_delete);
 
+	pr_info("pico_osci: FAILED to init module.\n");
+
 	return retval;
 }
+
 
 static void pico_osci_disconnect(struct usb_interface *interface)
 {
@@ -799,7 +653,7 @@ static void pico_osci_disconnect(struct usb_interface *interface)
 
 	usb_kill_urb(dev->iso_in_urb[0]);
 	usb_kill_urb(dev->iso_in_urb[1]);
-	usb_kill_anchored_urbs(&dev->submitted);
+	// usb_kill_anchored_urbs(&dev->submitted);
 
 	/* decrement our usage count */
 	kref_put(&dev->kref, pico_osci_delete);
@@ -813,12 +667,12 @@ static struct usb_driver pico_osci_driver = {
 	.name =		"pico_osci",
 	.probe =	pico_osci_probe,
 	.disconnect =	pico_osci_disconnect,
-	/*.suspend =	pico_osci_suspend,*/
-	/*.resume =	pico_osci_resume,*/
-	/*.pre_reset =	pico_osci_pre_reset,*/
-	/*.post_reset =	pico_osci_post_reset,*/
+	// .suspend =	pico_osci_suspend,
+	// .resume =	pico_osci_resume,
+	// .pre_reset =	pico_osci_pre_reset,
+	// .post_reset =	pico_osci_post_reset,
 	.id_table =	pico_osci_table,
-	/*.supports_autosuspend = 1,*/
+	// .supports_autosuspend = 1,
 };
 
 #if 0

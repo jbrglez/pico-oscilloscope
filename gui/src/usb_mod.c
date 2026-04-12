@@ -265,7 +265,7 @@ void *event_thread_func(void *context) {
         if (bytes_read == -1) {
             printf("error number %d\n", errno);
             perror("Error reading data from device.");
-            exit(-1);
+            // exit(-1);
             continue;
         }
 
