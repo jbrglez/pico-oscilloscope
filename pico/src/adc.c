@@ -46,6 +46,8 @@ typedef struct {
     volatile u16 idx_last;
     volatile i32 num_writes;
     volatile i32 num_reads;
+    volatile u16 active_ch;
+    volatile u16 start_on_next;
 #if defined(DBG_LOG) && defined(DBG_USB_EP4_XFER)
     #define DBG_NUM_EP4_REQS (1<<4)
     #define DBG_NUM_EP4_REQS_MASK ((1<<4) - 1)
@@ -89,7 +91,6 @@ internal new_sample_batch_t adc_get_new_sample_batch(void) {
 
     i32 idx_lst = ep4_ADMA.idx_last;
 
-    // if ((ep4_ADMA.num_writes <= ep4_ADMA.num_reads) && (idx_current >= ep4_ADMA.idx_last)) {
     if (idx_current >= ep4_ADMA.idx_last) {
         new_samples.size = MIN(idx_current - ep4_ADMA.idx_last, MAX_BATCH_SIZE);
         ep4_ADMA.idx_last += new_samples.size;
@@ -184,14 +185,13 @@ internal void adc_dma_isr(void) {
     ep4_ADMA.isr_reads[ep4_ADMA.isr_time_idx] = ep4_ADMA.num_writes;
 #endif
 
-    // if ((((num_writes - num_reads) < 2) && (idx_last > 0)) || (num_writes == num_reads)) {
     if ((((num_writes - num_reads) < 2) && (idx_last > 0)) || (num_writes == num_reads)) {
         dma_hw->ch[DMA_ADC_CH].transfer_count = (1<<11);
         dma_hw->ch[DMA_ADC_CH].al2_write_addr_trig = (u32)endp4_in.data_buffer;
     }
     else {
         hw_clear_bits(&adc_hw->cs, ADC_CS_ERR_STICKY | ADC_CS_START_MANY | ADC_CS_START_ONCE);
-        DBG_str(&dbg0, "Stopped ADC capturing.\n");
+        DBG_str(&dbg0, "Stopped ADC capturing.\r\n");
 
 #if defined(DBG_LOG) && defined(DBG_USB_EP4_XFER)
         u64 t_now = time_us();

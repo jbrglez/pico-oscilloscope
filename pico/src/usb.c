@@ -462,11 +462,13 @@ internal void usb_handle_setup_packet_vendor(void) {
             case  PICO_START_RUNNING_CAPTURE:
                 ep_transfer(&endp4_in, 0);
                 adc_stop_capturing();
-                if ((setup_packet->wValue == 0b01) ||
-                    (setup_packet->wValue == 0b10) ||
-                    (setup_packet->wValue == 0b11)
+                u16 ch = setup_packet->wValue;
+                if ((ch == 0b01) ||
+                    (ch == 0b10) ||
+                    (ch == 0b11)
                 ) {
-                    adc_start_capture_ep4(setup_packet->wValue);
+                    ep4_ADMA.active_ch = ch;
+                    ep4_ADMA.start_on_next = 1;
                 }
                 ep_transfer(&endp0_in, 0);
                 break;
@@ -480,14 +482,11 @@ internal void usb_handle_setup_packet_vendor(void) {
                 if (setup_packet->wValue & 2) {
                     sig_buffers_PIO.inactive_buf->length = setup_packet->wIndex;
                     sig_buffers_PIO.buf_copy_addr_offset = 0;
-                    // sig_buffers_PIO.buf_copy_len = (setup_packet->wLength + 3) / 4;
-                    sig_buffers_PIO.buf_copy_len = (setup_packet->wLength + 3) >> 2;
                 }
                 else {
                     sig_buffers_PIO.buf_copy_addr_offset = setup_packet->wIndex;
-                    // sig_buffers_PIO.buf_copy_len = (setup_packet->wLength + 3) / 4;
-                    sig_buffers_PIO.buf_copy_len = (setup_packet->wLength + 3) >> 2;
                 }
+                sig_buffers_PIO.buf_copy_len = (setup_packet->wLength + 3) >> 2;
 
                 sig_buffers_PIO.status = (setup_packet->wValue & 1) ? SIG_BUF_SWITCH_BUFFERS : SIG_BUF_NEW_DATA_IN_TRANSFER;
 
@@ -608,6 +607,10 @@ internal void usb_handle_buff_status() {
             }
 
             else if (i == 8) {   // EP4 IN
+                if (ep4_ADMA.start_on_next) {
+                    ep4_ADMA.start_on_next = 0;
+                    adc_start_capture_ep4(ep4_ADMA.active_ch);
+                }
                 endp4_next_transfer();
             }
 
