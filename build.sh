@@ -8,4 +8,6 @@ cd ../../pico/src
 bash build.sh
 cd ../../gui/src
 bash build.sh
-cd ../..
+cd pico_usb
+make
+cd ../../..

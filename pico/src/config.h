@@ -3,7 +3,7 @@
 
 
 // #define CONFIG_USE_I2C
-#define CONFIG_USE_UART
+// #define CONFIG_USE_UART
 
 #define DMA_ADC_CH 0
 

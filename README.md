@@ -1,10 +1,11 @@
 # About
-This was my project for learning embedded programming with Raspberry Pi Pico
-and a little bit of SIMD programming.
+This was my project for learning embedded programming with Raspberry Pi Pico,
+Linux kernel module programming and a little bit of SIMD programming.
 The project implements the firmware for a Raspberry Pi Pico with
 [RP2040](https://datasheets.raspberrypi.com/pico/pico-datasheet.pdf) micro-controller,
 that communicates over USB with a graphical user interface running on a PC,
 currently limited to Linux.
+The GUI connects to the Pico either using `libusb` or a custom Linux kernel module.
 
 The project consists of three parts:
 * t4co: some tools for producing the final binary for the Pico
@@ -34,14 +35,17 @@ The GUI also depends on [`libusb-1.0`](https://libusb.info) and
 You should be able to find `gcc`, `arm-none-eabi-gcc` and `libusb-1.0` development files,
 available in your distribution's package repository:
 
+- **Ubuntu**
 ```
-sudo apt install gcc gcc-arm-none-eabi libusb-1.0-0-dev     # Ubuntu
+sudo apt install build-essential gcc-arm-none-eabi libusb-1.0-0-dev linux-headers-$(uname -r)
 ```
+- **Fedora**
 ```
-sudo dnf install gcc arm-none-eabi-gcc libusb1-devel        # Fedora
+sudo dnf install gcc arm-none-eabi-gcc libusb1-devel make binutils kernel-devel-$(uname -r)
 ```
+- **Void Linux**
 ```
-sudo xbps-install gcc cross-arm-none-eabi-gcc libusb-devel  # Void Linux
+sudo xbps-install base-devel cross-arm-none-eabi-gcc libusb-devel linux-headers
 ```
 
 Example of how to download and compile this project together with `raylib`
@@ -82,8 +86,14 @@ sudo udevadm control --reload && sudo udevadm trigger
 ```
 
 Finally you can run the GUI:
+- **libusb version**
 ```
-./gui/build/oscilloscope
+./gui/build/oscilloscope_libusb
+```
+- **Linux kernel module version**
+```
+sudo insmod gui/src/pico_usb/pico_osci.ko
+./gui/build/oscilloscope_mod
 ```
 If you get "Permission denied" error, try reconnecting the USB cable or rebooting the PC.
 
